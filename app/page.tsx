@@ -41,8 +41,9 @@ function rotation(team:number) { return slots.map((time, i) => ({ time, game:gam
 
 async function supabase(path:string, init?:RequestInit) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...init, headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal", ...(init?.headers || {}) } });
-  if (!response.ok) throw new Error(await response.text());
-  return response.status === 204 ? null : response.json();
+  const body = await response.text();
+  if (!response.ok) throw new Error(body || `Supabase request failed (${response.status})`);
+  return body ? JSON.parse(body) : null;
 }
 
 export default function Home() {
