@@ -7,8 +7,8 @@ type Role = "leader" | "master";
 type Tab = "leaderboard" | "scoring" | "availability" | "buffers" | "checklist" | "map";
 type ScoreRow = { team: number; game: string; total: number; notes?: string; breakdown?: Record<string,number>; updated_at?: string };
 
-const SUPABASE_URL = "https://bltyvdocczegpbkglnof.supabase.co";
-const SUPABASE_KEY = "sb_publishable_mKReDjUk7ZbsR8HTB5-LuQ_-zGlA0dB";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://bltyvdocczegpbkglnof.supabase.co";
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_mKReDjUk7ZbsR8HTB5-LuQ_-zGlA0dB";
 
 const teams = Array.from({ length: 16 }, (_, i) => i + 1);
 
@@ -52,7 +52,7 @@ export default function Home() {
   const [availability,setAvailability] = useState<Record<string,boolean>>(initialAvailability);
   const [checks,setChecks] = useState<Record<string,boolean>>({});
   const [sync,setSync] = useState("Connecting…");
-  const [scoreGame,setScoreGame] = useState(games[0].id);
+  const [scoreGame,setScoreGame] = useState<string>(games[0].id);
   const [draft,setDraft] = useState<Record<string,number>>({});
   const [notes,setNotes] = useState("");
   const [saving,setSaving] = useState(false);
