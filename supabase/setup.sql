@@ -2,6 +2,8 @@ create table if not exists public.scores (
   team integer not null check (team between 1 and 16),
   game text not null,
   total integer not null default 0,
+  notes text not null default '',
+  breakdown jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now(),
   primary key (team, game)
 );
@@ -26,3 +28,7 @@ create policy "public availability read" on public.game_availability for select 
 create policy "public availability write" on public.game_availability for all using (true) with check (true);
 create policy "public checklist read" on public.checklist for select using (true);
 create policy "public checklist write" on public.checklist for all using (true) with check (true);
+
+-- Safe upgrade for projects that already ran an earlier version of this file.
+alter table public.scores add column if not exists notes text not null default '';
+alter table public.scores add column if not exists breakdown jsonb not null default '{}'::jsonb;
