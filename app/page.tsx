@@ -56,6 +56,7 @@ export default function Home() {
   const [draft,setDraft] = useState<Record<string,number>>({});
   const [notes,setNotes] = useState("");
   const [saving,setSaving] = useState(false);
+  const [celebrate,setCelebrate] = useState(false);
   const [notesReady,setNotesReady] = useState(true);
 
   useEffect(() => { (async()=>{ try {
@@ -67,8 +68,11 @@ export default function Home() {
 
   useEffect(()=>{
     const refreshScores=async()=>{try{let latest;try{latest=await supabase("scores?select=team,game,total,notes,breakdown,updated_at")}catch{latest=await supabase("scores?select=team,game,total,updated_at")}setScores(latest||[])}catch{/* Keep the last known scores during a brief connection issue. */}};
-    const timer=window.setInterval(refreshScores,4000);
-    return()=>window.clearInterval(timer);
+    const refreshWhenVisible=()=>{if(document.visibilityState==="visible")refreshScores()};
+    const timer=window.setInterval(refreshWhenVisible,8000);
+    window.addEventListener("focus",refreshWhenVisible);
+    document.addEventListener("visibilitychange",refreshWhenVisible);
+    return()=>{window.clearInterval(timer);window.removeEventListener("focus",refreshWhenVisible);document.removeEventListener("visibilitychange",refreshWhenVisible)};
   },[]);
 
   const gradedScores = useMemo(()=>scores.filter(score=>games.some(game=>game.id===score.game)),[scores]);
@@ -84,7 +88,7 @@ export default function Home() {
   useEffect(()=>{if(!visiblePages.some(p=>p.id===tab))setTab("leaderboard")},[role]);
   useEffect(()=>{ setDraft({}); setNotes(""); },[team,scoreGame]);
 
-  async function saveScore(){ if(saving||!hasDraft)return; setSaving(true); const row={team,game:scoreGame,total:draftTotal,notes:notes.trim(),breakdown:draft,updated_at:new Date().toISOString()}; try{await supabase("scores?on_conflict=team,game",{method:"POST",body:JSON.stringify({team,game:scoreGame,total:draftTotal,updated_at:row.updated_at})});setScores(v=>[...v.filter(s=>!(s.team===team&&s.game===scoreGame)),row]);let savedMessage=existingScore?"Score updated":"Saved live";if(notesReady){try{await supabase(`scores?team=eq.${team}&game=eq.${scoreGame}`,{method:"PATCH",body:JSON.stringify({notes:row.notes,breakdown:row.breakdown,updated_at:row.updated_at})})}catch{setNotesReady(false);savedMessage="Score saved · notes setup needed"}}setDraft({});setNotes("");setSync(savedMessage)}catch(error){setSync(error instanceof Error?`Could not save: ${error.message}`:"Could not save")}finally{setSaving(false)} }
+  async function saveScore(){ if(saving||!hasDraft)return; setSaving(true); const row={team,game:scoreGame,total:draftTotal,notes:notes.trim(),breakdown:draft,updated_at:new Date().toISOString()}; try{await supabase("scores?on_conflict=team,game",{method:"POST",body:JSON.stringify({team,game:scoreGame,total:draftTotal,updated_at:row.updated_at})});setScores(v=>[...v.filter(s=>!(s.team===team&&s.game===scoreGame)),row]);let savedMessage=existingScore?"Score updated":"Saved live";if(notesReady){try{await supabase(`scores?team=eq.${team}&game=eq.${scoreGame}`,{method:"PATCH",body:JSON.stringify({notes:row.notes,breakdown:row.breakdown,updated_at:row.updated_at})})}catch{setNotesReady(false);savedMessage="Score saved · notes setup needed"}}setDraft({});setNotes("");setSync(savedMessage);setCelebrate(true);window.setTimeout(()=>setCelebrate(false),1800)}catch(error){setSync(error instanceof Error?`Could not save: ${error.message}`:"Could not save")}finally{setSaving(false)} }
   async function resetScore(){ if(!existingScore||saving)return; setSaving(true); setScores(v=>v.filter(s=>!(s.team===team&&s.game===scoreGame))); setDraft({});setNotes("");try{await supabase(`scores?team=eq.${team}&game=eq.${scoreGame}`,{method:"DELETE"});setSync("Score reset")}catch{setSync("Could not reset")}finally{setSaving(false)} }
   async function toggleAvailability(id:string){ if(role!=="master"||id==="media")return; const available=!availability[id]; setAvailability(v=>({...v,[id]:available})); try{await supabase("game_availability?on_conflict=game",{method:"POST",body:JSON.stringify({game:id,available})});setSync("Saved live")}catch{setSync("Saved in preview")} }
   async function toggleCheck(id:string){const key=`${team}-${id}`,complete=!checks[key];setChecks(v=>({...v,[key]:complete}));try{await supabase("checklist?on_conflict=team,game",{method:"POST",body:JSON.stringify({team,game:id,complete})});setSync("Saved live")}catch{setSync("Saved in preview")} }
@@ -96,6 +100,7 @@ export default function Home() {
       <nav>{visiblePages.map(p=><button key={p.id} className={tab===p.id?"active":""} onClick={()=>setTab(p.id)}><span>{p.icon}</span>{p.label}</button>)}</nav>
     </aside>
     <main>
+      {celebrate&&<div className="save-celebration" role="status"><span>✦</span><strong>Score saved!</strong><span>✦</span></div>}
       <header className="topbar"><div><p>MUISS × SASS INTERNATIONAL GAMES NIGHT</p><h1>{pages.find(p=>p.id===tab)?.label}</h1></div><div className="header-actions"><div className="mobile-role"><button className={role==="leader"?"active":""} onClick={()=>setRole("leader")}>Leader</button><button className={role==="master"?"active":""} onClick={()=>setRole("master")}>Master</button></div><span className={`sync ${sync.includes("Live")||sync.includes("Saved")||sync.includes("updated")||sync.includes("reset")?"ok":""}`}>{sync}</span><label>Viewing team<select value={team} onChange={e=>setTeam(Number(e.target.value))}>{teams.map(t=><option key={t} value={t}>Team {String(t).padStart(2,"0")}</option>)}</select></label></div></header>
 
       {tab==="leaderboard"&&<section className="page"><div className="hero"><div><span className="eyebrow">THE GLOBAL CIRCUIT</span><h2>Play the world.<br/><em>Top the board.</em></h2><p>Eleven graded games. Sixteen teams. One night to remember.</p></div><div className="hero-orbit"><span>16</span><small>TEAMS</small></div></div><div className="stats"><article><span>🎮</span><div><b>11</b><small>Graded games</small></div></article><article><span>⏸</span><div><b>4</b><small>Buffer zones</small></div></article><article><span>✓</span><div><b>{scores.length}</b><small>Scores submitted</small></div></article></div><div className="panel"><div className="panel-title"><div><span className="eyebrow">LIVE RANKING</span><h3>Leaderboard</h3></div><span>Graded stations only</span></div><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Team</th><th>Games</th><th>Total points</th></tr></thead><tbody>{leaderboard.map((r,i)=><tr key={r.team}><td><span className={`rank r${i+1}`}>{i+1}</span></td><td><b>Team {String(r.team).padStart(2,"0")}</b></td><td>{r.played}/11</td><td><strong>{r.total}</strong></td></tr>)}</tbody></table></div></div></section>}
