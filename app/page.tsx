@@ -37,8 +37,14 @@ const buffers = [
 const venueById:Record<string,string> = {tokyo:"Badminton Court",scroll:"Badminton Court",dodo:"Badminton Court",cups:"Badminton Court",art:"Badminton Court",safari:"Badminton Court",golden:"Badminton Court",galaxy:"Student Lounge",blackhole:"Student Lounge",medicine:"Student Lounge",rally:"Dance Studio",island:"Dance Studio",monsoon:"Dance Studio",marble:"Dance Studio",media:"Media Zone"};
 const venueFor=(id:string,fallback:string)=>venueById[id]||fallback;
 
+const flowGameIds=["tokyo","dodo","golden","safari","art","cups","galaxy","blackhole","island","monsoon","marble"];
+const flowBooths=[
+  ...flowGameIds.map(id=>({...games.find(game=>game.id===id)!,graded:true})),
+  ...Array.from({length:5},(_,index)=>({id:`flow-buffer-${index+1}`,country:"BUFFER ZONE",name:`Buffer ${index+1}`,venue:"Buffer Zone",icon:"⏱",graded:false}))
+];
+
 const initialAvailability = Object.fromEntries([...games, ...buffers].map(g => [g.id, true]));
-function rotation(team:number) { return games.map((_, i) => ({ game:games[(team - 1 + i) % games.length] })); }
+function rotation(team:number) { return flowBooths.map((_, i) => ({ game:flowBooths[(team - 1 + i) % flowBooths.length] })); }
 
 async function supabase(path:string, init?:RequestInit) {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...init, headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal", ...(init?.headers || {}) } });
@@ -60,6 +66,7 @@ export default function Home() {
   const [notes,setNotes] = useState("");
   const [saving,setSaving] = useState(false);
   const [celebrate,setCelebrate] = useState(false);
+  const [showMasterFlow,setShowMasterFlow] = useState(false);
   const [notesReady,setNotesReady] = useState(true);
 
   useEffect(() => { (async()=>{ try {
@@ -85,7 +92,7 @@ export default function Home() {
   const hasDraft = Object.keys(draft).length > 0;
   const draftTotal = selectedGame.criteria.reduce((n,[name,max])=>n+Math.min(max,Math.max(0,draft[name]||0)),0);
   const pages:{id:Tab;label:string;icon:string;access:"both"|Role}[] = [
-    {id:"leaderboard",label:"Leaderboard",icon:"🏆",access:"both"},{id:"scoring",label:"Scoring",icon:"✦",access:"master"},{id:"availability",label:"Availability",icon:"◉",access:"both"},{id:"buffers",label:"Buffer zones",icon:"⏱",access:"leader"},{id:"checklist",label:"Checklist",icon:"✓",access:"leader"},{id:"map",label:"Map",icon:"⌖",access:"both"}
+    {id:"leaderboard",label:"Leaderboard",icon:"🏆",access:"both"},{id:"scoring",label:"Scoring",icon:"✦",access:"master"},{id:"availability",label:"Availability",icon:"◉",access:"both"},{id:"buffers",label:"Buffer zones",icon:"⏱",access:"leader"},{id:"checklist",label:"Flow plan",icon:"✓",access:"both"},{id:"map",label:"Map",icon:"⌖",access:"both"}
   ];
   const visiblePages=pages.filter(p=>p.access==="both"||p.access===role);
   useEffect(()=>{if(!visiblePages.some(p=>p.id===tab))setTab("leaderboard")},[role]);
@@ -114,7 +121,7 @@ export default function Home() {
 
       {tab==="buffers"&&<section className="page"><div className="page-intro"><div><span className="eyebrow">ZERO POINTS · ALL ENERGY</span><h2>Buffer zones</h2><p>Use a buffer whenever your next station is occupied. These activities never affect the leaderboard.</p></div></div><div className="buffer-grid">{buffers.map(b=><article className={b.always?"featured":""} key={b.id}><div className="buffer-head"><span>{b.icon}</span><i>{b.always?"ALWAYS OPEN":availability[b.id]?"OPEN":"PAUSED"}</i></div><small>{b.country} · {venueFor(b.id,b.venue)}</small><h3>{b.name}</h3><p>{b.rules}</p><div className="ungraded">Not graded</div></article>)}</div></section>}
 
-      {tab==="checklist"&&<section className="page"><div className="check-head"><div><span className="eyebrow">TEAM {String(team).padStart(2,"0")}</span><h2>Game checklist</h2><p>Scored games complete automatically. Mark any missing station manually.</p></div><div className="progress-ring"><strong>{games.filter(g=>scores.some(s=>s.team===team&&s.game===g.id)||checks[`${team}-${g.id}`]).length}<small>/11</small></strong></div></div><div className="checklist">{rotation(team).map((slot,i)=>{const auto=scores.some(s=>s.team===team&&s.game===slot.game.id),done=auto||checks[`${team}-${slot.game.id}`];return <button key={slot.game.id} className={done?"done":""} onClick={()=>!auto&&toggleCheck(slot.game.id)}><span className="check">{done?"✓":i+1}</span><span className="game-icon">{slot.game.icon}</span><span><b>{slot.game.name}</b><small>{slot.game.country} · {venueFor(slot.game.id,slot.game.venue)}</small></span><em>{auto?"Scored":done?"Manual":"Next"}</em></button>})}</div></section>}
+      {tab==="checklist"&&<section className="page">{role==="master"&&!showMasterFlow?<div className="optional-flow"><span>↻</span><h2>Team rotation reference</h2><p>Optional Game Master view. Check the exact 16-booth order for any selected team.</p><button className="primary" onClick={()=>setShowMasterFlow(true)}>Show flow plan</button></div>:<><div className="check-head"><div><span className="eyebrow">TEAM {String(team).padStart(2,"0")} · 16-BOOTH FLOW</span><h2>{role==="master"?"Rotation reference":"Game checklist"}</h2><p>{role==="master"?"Read-only reference following the approved T1-T16 flow plan.":"Follow this exact station order. Scored games complete automatically; mark buffers or missing stations manually."}</p>{role==="master"&&<button className="hide-flow" onClick={()=>setShowMasterFlow(false)}>Hide optional flow</button>}</div>{role==="leader"&&<div className="progress-ring"><strong>{rotation(team).filter(slot=>scores.some(s=>s.team===team&&s.game===slot.game.id)||checks[`${team}-${slot.game.id}`]).length}<small>/16</small></strong></div>}</div><div className="checklist">{rotation(team).map((slot,i)=>{const auto=slot.game.graded&&scores.some(s=>s.team===team&&s.game===slot.game.id),done=auto||checks[`${team}-${slot.game.id}`];return <button key={slot.game.id} className={done?"done":""} disabled={role==="master"} onClick={()=>role==="leader"&&!auto&&toggleCheck(slot.game.id)}><span className="check">{done?"✓":i+1}</span><span className="game-icon">{slot.game.icon}</span><span><b>{slot.game.name}</b><small>{slot.game.country} · {venueFor(slot.game.id,slot.game.venue)}</small></span><em>{auto?"Scored":done?"Manual":slot.game.graded?"Game":"Buffer"}</em></button>})}</div></>}</section>}
 
       {tab==="map"&&<section className="page"><div className="map-layout"><div className="map-card"><div className="map-title"><span>MONASH SPORTS CENTRE</span><b>International Games Night · Floor plan</b></div><div className="actual-floor">
         <section className="venue-map"><h3>BADMINTON COURT</h3><div className="venue-grid badminton-grid"><article className="support-zone">FIRST AID</article><article><b>Japan</b><small>Tokyo Tip-Toe</small></article><article className="buffer-zone"><b>China</b><small>The Endless Scroll · Buffer</small></article><article><b>Mauritius</b><small>Dodo Ring</small></article><article className="support-zone wide-support">SUPERVISORS &amp; COMPLAINTS</article><article><b>India × Nepal</b><small>Himalayan Hustle</small></article><article><b>Pakistan</b><small>Rang-E-Pakistan</small></article><article><b>Africa</b><small>Safari Express</small></article><article><b>Myanmar</b><small>Golden Order</small></article></div></section>
