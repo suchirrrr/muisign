@@ -73,7 +73,7 @@
   .penalty-field{margin:0 14px 16px;gap:10px}
   .validation-note{margin-left:14px;margin-right:14px;font-size:12px}
   .total{position:static;margin:14px;background:#edf3d5;box-shadow:none}
-  .score-actions{position:sticky;bottom:calc(72px + env(safe-area-inset-bottom));z-index:8;grid-template-columns:minmax(0,1.7fr) minmax(100px,1fr);gap:8px;margin:0;padding:10px 14px;background:linear-gradient(180deg,#ffffff00,#fff 22%);box-shadow:0 -8px 22px #173f3512}
+  .score-actions{position:static;grid-template-columns:minmax(0,1.7fr) minmax(100px,1fr);gap:8px;margin:0;padding:10px 14px;background:#fff;box-shadow:none}
   .score-actions .primary,.score-actions .reset{min-height:52px;padding:10px 8px;font-size:13px}
   .duplicate-note{padding-bottom:8px}
   .table-wrap{-webkit-overflow-scrolling:touch}
