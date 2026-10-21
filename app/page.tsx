@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./ign.css";
 
 type Mode = "guest" | "master";
@@ -91,44 +91,40 @@ export default function Home() {
 
   const openCount = booths.filter(booth => availability[booth.id]).length;
   const assignedBooth = booths.find(booth => booth.id === assignedBoothId);
-  const visibleBooths = useMemo(() => booths.filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true), [filter, availability]);
+  const visibleCases = boothGroups.map((group, index) => ({ group, index, entries: booths.filter(booth => booth.name === group.name).filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true) })).filter(item => item.entries.length);
 
-  return <main className={`masquerade-shell ${mode === "master" ? "master-mode" : ""}`}>
-    <header className="masquerade-header">
-      <div className="crest" aria-hidden="true"><span>☾</span></div>
-      <div className="event-title"><p>OCTOBER INTAKE · CASE 2026</p><h1>Murder <i>Masquerade</i></h1><span>International Games Night</span></div>
-      <div className="mode-switch" aria-label="Viewing mode"><button className={mode === "guest" ? "active" : ""} onClick={() => setMode("guest")}>Guest view</button><button className={mode === "master" ? "active" : ""} onClick={() => setMode("master")}>Game Master</button></div>
+  return <main className={`crime-shell ${mode === "master" ? "control-mode" : "guest-mode"}`}>
+    <header className="crime-header">
+      <div className="crime-brand"><span className="brand-signal">M</span><div><b>MURDER MASQUERADE</b><small>OCTOBER IGN · LIVE SYSTEM</small></div></div>
+      <nav className="view-tabs" aria-label="Choose view"><button className={mode === "guest" ? "active" : ""} onClick={() => setMode("guest")}>Live board</button><button className={mode === "master" ? "active" : ""} onClick={() => setMode("master")}>My booth</button></nav>
+      <button className="header-sync" onClick={() => loadAvailability()}><i className={sync === "Live now" || sync === "Board updated" ? "live" : ""}/><span>{sync}</span><b>↻</b></button>
     </header>
 
-    <section className="availability-page">
-      <div className="intro-card">
-        <div className="intro-copy"><span className="kicker">LIVE BOOTH INTELLIGENCE</span><h2>A killer walks <em>among us.</em></h2><p>{mode === "master" ? "Your assigned booth control is waiting below. Choose it once and this device will remember it." : "Choose an available investigation. Trust no one. This board updates automatically as the case unfolds."}</p></div>
-        <div className="availability-tally" aria-label={`${openCount} of 16 booths available`}><strong>{openCount}</strong><span>of 16</span><small>available now</small></div>
-        <div className="mask-mark" aria-hidden="true">◡</div>
-      </div>
+    {mode === "guest" ? <>
+      <section className="crime-hero">
+        <div className="hero-code">INCIDENT / 10.2026 / ACTIVE</div>
+        <div className="hero-message"><span>NOT EVERY CLUE WANTS TO BE FOUND</span><h1>ENTER THE<br/><em>CRIME SCENE</em></h1><p>Eight investigations. Sixteen live booths. Choose an available lead before someone else gets there first.</p></div>
+        <div className="hero-figure" aria-hidden="true"><div className="eyes"><i/><i/></div><span>UNKNOWN<br/>SUBJECT</span></div>
+        <div className="hero-count"><strong>{openCount}</strong><span>AVAILABLE</span><small>OUT OF 16 BOOTHS</small></div>
+      </section>
+      <section className="briefing-strip"><span>● LIVE INTELLIGENCE</span><p>Status refreshes automatically every eight seconds.</p><b>SCROLL TO INVESTIGATE ↓</b></section>
+    </> : <section className="control-hero">
+      <div><span>GAME MASTER CONTROL ROOM</span><h1>Control your booth.<br/><em>Nothing else.</em></h1><p>Select your station once. This device remembers it for the rest of the event.</p></div>
+      <label>YOUR ASSIGNED STATION<select value={assignedBoothId} onChange={event => assignBooth(event.target.value)}><option value="">Choose booth…</option>{booths.map(booth => <option value={booth.id} key={booth.id}>{String(booth.number).padStart(2, "0")} · {booth.name} {booth.wing}</option>)}</select></label>
+    </section>}
 
-      {mode === "master" && <section className="gm-console">
-        <div className="gm-console-head"><div><span>GAME MASTER COMMAND</span><h2>Your booth. One tap.</h2><p>Choose your assigned booth once. It will stay saved on this phone.</p></div><label>Assigned booth<select value={assignedBoothId} onChange={event => assignBooth(event.target.value)}><option value="">Select your booth…</option>{booths.map(booth => <option value={booth.id} key={booth.id}>{String(booth.number).padStart(2, "0")} · {booth.name} {booth.wing}</option>)}</select></label></div>
-        {assignedBooth ? <div className={`assigned-control ${availability[assignedBooth.id] ? "is-open" : "is-occupied"}`}><div className="assigned-identity"><span>{assignedBooth.icon}</span><div><small>YOUR ASSIGNED BOOTH · {String(assignedBooth.number).padStart(2, "0")}</small><b>{assignedBooth.name}</b><em>Booth {assignedBooth.wing}</em></div></div><div className="assigned-state"><small>Current status</small><strong><i/>{availability[assignedBooth.id] ? "AVAILABLE" : "OCCUPIED"}</strong></div><button disabled={updating === assignedBooth.id} onClick={() => toggleBooth(assignedBooth.id)}>{updating === assignedBooth.id ? "Updating…" : availability[assignedBooth.id] ? "Mark as occupied" : "Mark as available"}</button></div> : <div className="assign-empty"><span>⌖</span><p>Select your booth above to unlock your quick control.</p></div>}
-      </section>}
+    <section className="crime-content">
+      {mode === "master" && (assignedBooth ? <section className={`my-booth ${availability[assignedBooth.id] ? "open" : "busy"}`}>
+        <div className="my-booth-index"><span>STATION</span><strong>{String(assignedBooth.number).padStart(2, "0")}</strong></div><div className="my-booth-name"><small>YOUR ACTIVE CONTROL</small><h2>{assignedBooth.name}</h2><p>BOOTH {assignedBooth.wing}</p></div><div className="my-booth-status"><span>CURRENT STATE</span><strong><i/>{availability[assignedBooth.id] ? "AVAILABLE" : "OCCUPIED"}</strong></div><button disabled={updating === assignedBooth.id} onClick={() => toggleBooth(assignedBooth.id)}>{updating === assignedBooth.id ? "UPDATING…" : availability[assignedBooth.id] ? "SET TO OCCUPIED" : "SET TO AVAILABLE"}<span>→</span></button>
+      </section> : <section className="select-prompt"><span>01</span><div><b>NO BOOTH SELECTED</b><p>Use the station selector above. Your control panel will appear here.</p></div></section>)}
 
-      <div className="board-toolbar">
-        <div className="filters" aria-label="Filter booths"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All <b>16</b></button><button className={filter === "open" ? "active" : ""} onClick={() => setFilter("open")}>Available <b>{openCount}</b></button><button className={filter === "occupied" ? "active" : ""} onClick={() => setFilter("occupied")}>Occupied <b>{16 - openCount}</b></button></div>
-        <button className="sync-status" onClick={() => loadAvailability()} aria-label="Refresh booth availability"><i className={sync === "Live now" || sync === "Board updated" ? "live" : ""}/>{sync}<span>↻</span></button>
-      </div>
+      <div className="case-heading"><div><span>{mode === "master" ? "SECONDARY OVERVIEW" : "ACTIVE INVESTIGATIONS"}</span><h2>{mode === "master" ? "All booth activity" : "Choose your case"}</h2></div><div className="case-filters"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>ALL / 16</button><button className={filter === "open" ? "active" : ""} onClick={() => setFilter("open")}>OPEN / {openCount}</button><button className={filter === "occupied" ? "active" : ""} onClick={() => setFilter("occupied")}>BUSY / {16-openCount}</button></div></div>
 
-      {mode === "master" && <div className="all-booths-label"><span>ALL BOOTHS</span><p>You can still update any booth from the full board below.</p></div>}
-
-      <div className="booth-grid">{visibleBooths.map(booth => {
-        const available = availability[booth.id];
-        const busy = updating === booth.id;
-        return <button key={booth.id} className={`booth-card ${available ? "available" : "occupied"} ${mode === "master" ? "editable" : ""}`} onClick={() => toggleBooth(booth.id)} disabled={mode !== "master" || busy} aria-label={`${booth.name} ${booth.wing}, ${available ? "available" : "occupied"}${mode === "master" ? ", tap to change" : ""}`}>
-          <span className="booth-number">{String(booth.number).padStart(2, "0")}</span><span className="booth-icon">{booth.icon}</span><span className="booth-copy"><small>{booth.clue}</small><b>{booth.name}</b><em>Booth {booth.wing}</em></span><span className="status-pill"><i/>{busy ? "Updating" : available ? "Available" : "Occupied"}</span>{mode === "master" && <span className="tap-hint">Tap to {available ? "pause" : "open"}</span>}
-        </button>;
-      })}</div>
-
-      {!visibleBooths.length && <div className="empty-state"><span>⌛</span><h3>No booths in this view</h3><p>Try another filter to see the full case board.</p></div>}
-      <footer><span>✦</span><p>Keep your identity concealed. Keep your evidence close.</p><span>✦</span></footer>
+      <div className="case-board">{visibleCases.map(({group,index,entries}) => <article className="case-row" key={group.name}>
+        <div className="case-file"><span>CASE {String(index+1).padStart(2,"0")}</span><i>{group.icon}</i></div><div className="case-name"><small>{group.clue}</small><h3>{group.name}</h3><p>{entries.length === 2 ? "TWO PARALLEL BOOTHS" : "FILTERED RESULT"}</p></div><div className="case-wings">{entries.map(booth => {const available=availability[booth.id],busy=updating===booth.id;return <button key={booth.id} className={available ? "wing-open" : "wing-busy"} disabled={mode!=="master"||busy} onClick={()=>toggleBooth(booth.id)}><span>BOOTH {booth.wing}</span><strong><i/>{busy?"UPDATING":available?"AVAILABLE":"OCCUPIED"}</strong>{mode==="master"&&<small>TAP TO CHANGE</small>}</button>})}</div>
+      </article>)}</div>
+      {!visibleCases.length && <div className="no-cases"><b>NO MATCHING CASES</b><p>Change the status filter to continue.</p></div>}
     </section>
+    <footer className="crime-footer"><span>SYSTEM ONLINE</span><p>Trust the evidence. Question everyone.</p><b>MM / 2026</b></footer>
   </main>;
 }
