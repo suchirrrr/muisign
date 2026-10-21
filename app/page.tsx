@@ -47,6 +47,7 @@ export default function Home() {
   const [availability, setAvailability] = useState<Record<string, boolean>>(initialAvailability);
   const [sync, setSync] = useState("Connecting…");
   const [updating, setUpdating] = useState<string | null>(null);
+  const [assignedBoothId, setAssignedBoothId] = useState("");
 
   async function loadAvailability(silent = false) {
     if (!silent) setSync("Checking booths…");
@@ -61,10 +62,18 @@ export default function Home() {
   }
 
   useEffect(() => {
+    const savedBooth = window.localStorage.getItem("murder-masquerade-booth");
+    if (savedBooth && booths.some(booth => booth.id === savedBooth)) setAssignedBoothId(savedBooth);
     loadAvailability();
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") loadAvailability(true); }, 8000);
     return () => window.clearInterval(timer);
   }, []);
+
+  function assignBooth(id: string) {
+    setAssignedBoothId(id);
+    if (id) window.localStorage.setItem("murder-masquerade-booth", id);
+    else window.localStorage.removeItem("murder-masquerade-booth");
+  }
 
   async function toggleBooth(id: string) {
     if (mode !== "master" || updating) return;
@@ -81,28 +90,34 @@ export default function Home() {
   }
 
   const openCount = booths.filter(booth => availability[booth.id]).length;
+  const assignedBooth = booths.find(booth => booth.id === assignedBoothId);
   const visibleBooths = useMemo(() => booths.filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true), [filter, availability]);
 
-  return <main className="masquerade-shell">
+  return <main className={`masquerade-shell ${mode === "master" ? "master-mode" : ""}`}>
     <header className="masquerade-header">
       <div className="crest" aria-hidden="true"><span>☾</span></div>
-      <div className="event-title"><p>MUISS × SASS · OCTOBER INTAKE</p><h1>Murder <i>Masquerade</i></h1><span>International Games Night 2026</span></div>
+      <div className="event-title"><p>OCTOBER INTAKE · CASE 2026</p><h1>Murder <i>Masquerade</i></h1><span>International Games Night</span></div>
       <div className="mode-switch" aria-label="Viewing mode"><button className={mode === "guest" ? "active" : ""} onClick={() => setMode("guest")}>Guest view</button><button className={mode === "master" ? "active" : ""} onClick={() => setMode("master")}>Game Master</button></div>
     </header>
 
     <section className="availability-page">
       <div className="intro-card">
-        <div className="intro-copy"><span className="kicker">CASE FILE 01 · LIVE BOOTH BOARD</span><h2>Choose your next <em>investigation.</em></h2><p>{mode === "master" ? "Tap any booth card to mark it available or occupied. Every device updates automatically." : "Find an available booth, gather your team and follow the clues. This board refreshes automatically."}</p></div>
+        <div className="intro-copy"><span className="kicker">LIVE BOOTH INTELLIGENCE</span><h2>A killer walks <em>among us.</em></h2><p>{mode === "master" ? "Your assigned booth control is waiting below. Choose it once and this device will remember it." : "Choose an available investigation. Trust no one. This board updates automatically as the case unfolds."}</p></div>
         <div className="availability-tally" aria-label={`${openCount} of 16 booths available`}><strong>{openCount}</strong><span>of 16</span><small>available now</small></div>
         <div className="mask-mark" aria-hidden="true">◡</div>
       </div>
+
+      {mode === "master" && <section className="gm-console">
+        <div className="gm-console-head"><div><span>GAME MASTER COMMAND</span><h2>Your booth. One tap.</h2><p>Choose your assigned booth once. It will stay saved on this phone.</p></div><label>Assigned booth<select value={assignedBoothId} onChange={event => assignBooth(event.target.value)}><option value="">Select your booth…</option>{booths.map(booth => <option value={booth.id} key={booth.id}>{String(booth.number).padStart(2, "0")} · {booth.name} {booth.wing}</option>)}</select></label></div>
+        {assignedBooth ? <div className={`assigned-control ${availability[assignedBooth.id] ? "is-open" : "is-occupied"}`}><div className="assigned-identity"><span>{assignedBooth.icon}</span><div><small>YOUR ASSIGNED BOOTH · {String(assignedBooth.number).padStart(2, "0")}</small><b>{assignedBooth.name}</b><em>Booth {assignedBooth.wing}</em></div></div><div className="assigned-state"><small>Current status</small><strong><i/>{availability[assignedBooth.id] ? "AVAILABLE" : "OCCUPIED"}</strong></div><button disabled={updating === assignedBooth.id} onClick={() => toggleBooth(assignedBooth.id)}>{updating === assignedBooth.id ? "Updating…" : availability[assignedBooth.id] ? "Mark as occupied" : "Mark as available"}</button></div> : <div className="assign-empty"><span>⌖</span><p>Select your booth above to unlock your quick control.</p></div>}
+      </section>}
 
       <div className="board-toolbar">
         <div className="filters" aria-label="Filter booths"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All <b>16</b></button><button className={filter === "open" ? "active" : ""} onClick={() => setFilter("open")}>Available <b>{openCount}</b></button><button className={filter === "occupied" ? "active" : ""} onClick={() => setFilter("occupied")}>Occupied <b>{16 - openCount}</b></button></div>
         <button className="sync-status" onClick={() => loadAvailability()} aria-label="Refresh booth availability"><i className={sync === "Live now" || sync === "Board updated" ? "live" : ""}/>{sync}<span>↻</span></button>
       </div>
 
-      {mode === "master" && <div className="master-note"><span>✦</span><div><b>Game Master controls are active</b><small>Tap a booth to switch its status. Changes go live for everyone.</small></div></div>}
+      {mode === "master" && <div className="all-booths-label"><span>ALL BOOTHS</span><p>You can still update any booth from the full board below.</p></div>}
 
       <div className="booth-grid">{visibleBooths.map(booth => {
         const available = availability[booth.id];
