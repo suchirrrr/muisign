@@ -10,14 +10,14 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://bltyvdoccz
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_mKReDjUk7ZbsR8HTB5-LuQ_-zGlA0dB";
 
 const boothGroups = [
-  { name: "The Underground Casino", icon: "♠", clue: "HIGH STAKES", booths: ["A", "B"] },
-  { name: "The Evidence Relay", icon: "⌁", clue: "CHAIN OF CUSTODY", booths: ["A", "B"] },
-  { name: "The Forensics Lab", icon: "⌕", clue: "TRACE THE TRUTH", booths: ["A", "B"] },
-  { name: "The Secret Sketch", icon: "✎", clue: "DRAW THE SUSPECT", booths: ["A", "B"] },
-  { name: "The Crime Scene Memory", icon: "◉", clue: "NOTICE EVERYTHING", booths: ["A", "B"] },
-  { name: "The Blind Vault Heist", icon: "◇", clue: "TRUST YOUR CREW", booths: ["A", "B"] },
-  { name: "The Telephone Witness", icon: "☏", clue: "PASS THE TESTIMONY", booths: ["A", "B"] },
-  { name: "The Locked Study", icon: "⚿", clue: "ESCAPE THE ROOM", booths: ["A", "B"] },
+  { name: "The Underground Casino", short: "Casino", icon: "♠", clue: "HIGH STAKES", booths: ["A", "B"] },
+  { name: "The Evidence Relay", short: "Relay", icon: "⌁", clue: "CHAIN OF CUSTODY", booths: ["A", "B"] },
+  { name: "The Forensics Lab", short: "Forensics", icon: "⌕", clue: "TRACE THE TRUTH", booths: ["A", "B"] },
+  { name: "The Secret Sketch", short: "Sketch", icon: "✎", clue: "DRAW THE SUSPECT", booths: ["A", "B"] },
+  { name: "The Crime Scene Memory", short: "Memory", icon: "◉", clue: "NOTICE EVERYTHING", booths: ["A", "B"] },
+  { name: "The Blind Vault Heist", short: "Vault", icon: "◇", clue: "TRUST YOUR CREW", booths: ["A", "B"] },
+  { name: "The Telephone Witness", short: "Witness", icon: "☏", clue: "PASS THE TESTIMONY", booths: ["A", "B"] },
+  { name: "The Locked Study", short: "Study", icon: "⚿", clue: "ESCAPE THE ROOM", booths: ["A", "B"] },
 ] as const;
 
 const booths = boothGroups.flatMap((group, groupIndex) => group.booths.map((wing, wingIndex) => ({
@@ -27,6 +27,7 @@ const booths = boothGroups.flatMap((group, groupIndex) => group.booths.map((wing
   wing,
   icon: group.icon,
   clue: group.clue,
+  short: group.short,
 })));
 
 const initialAvailability = Object.fromEntries(booths.map(booth => [booth.id, true]));
@@ -48,6 +49,7 @@ export default function Home() {
   const [sync, setSync] = useState("Connecting…");
   const [updating, setUpdating] = useState<string | null>(null);
   const [assignedBoothId, setAssignedBoothId] = useState("");
+  const [detailBoothId, setDetailBoothId] = useState<string | null>(null);
 
   async function loadAvailability(silent = false) {
     if (!silent) setSync("Checking booths…");
@@ -92,6 +94,8 @@ export default function Home() {
   const openCount = booths.filter(booth => availability[booth.id]).length;
   const assignedBooth = booths.find(booth => booth.id === assignedBoothId);
   const visibleCases = boothGroups.map((group, index) => ({ group, index, entries: booths.filter(booth => booth.name === group.name).filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true) })).filter(item => item.entries.length);
+  const quickBooths = booths.filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true).sort((a,b) => filter === "all" ? Number(availability[b.id]) - Number(availability[a.id]) : a.number - b.number);
+  const detailBooth = booths.find(booth => booth.id === detailBoothId);
 
   return <main className={`crime-shell ${mode === "master" ? "control-mode" : "guest-mode"}`}>
     <header className="crime-header">
@@ -118,13 +122,14 @@ export default function Home() {
         <div className="my-booth-index"><span>STATION</span><strong>{String(assignedBooth.number).padStart(2, "0")}</strong></div><div className="my-booth-name"><small>YOUR ACTIVE CONTROL</small><h2>{assignedBooth.name}</h2><p>BOOTH {assignedBooth.wing}</p></div><div className="my-booth-status"><span>CURRENT STATE</span><strong><i/>{availability[assignedBooth.id] ? "AVAILABLE" : "OCCUPIED"}</strong></div><button disabled={updating === assignedBooth.id} onClick={() => toggleBooth(assignedBooth.id)}>{updating === assignedBooth.id ? "UPDATING…" : availability[assignedBooth.id] ? "SET TO OCCUPIED" : "SET TO AVAILABLE"}<span>→</span></button>
       </section> : <section className="select-prompt"><span>01</span><div><b>NO BOOTH SELECTED</b><p>Use the station selector above. Your control panel will appear here.</p></div></section>)}
 
-      <div className="case-heading"><div><span>{mode === "master" ? "SECONDARY OVERVIEW" : "ACTIVE INVESTIGATIONS"}</span><h2>{mode === "master" ? "All booth activity" : "Choose your case"}</h2></div><div className="case-filters"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>ALL / 16</button><button className={filter === "open" ? "active" : ""} onClick={() => setFilter("open")}>OPEN / {openCount}</button><button className={filter === "occupied" ? "active" : ""} onClick={() => setFilter("occupied")}>BUSY / {16-openCount}</button></div></div>
+      <div className="case-heading"><div><span>{mode === "master" ? "SECONDARY OVERVIEW" : "QUICK AVAILABILITY"}</span><h2>{mode === "master" ? "All booth activity" : "Find an open booth"}</h2></div><div className="case-filters"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>ALL / 16</button><button className={filter === "open" ? "active" : ""} onClick={() => setFilter("open")}>OPEN / {openCount}</button><button className={filter === "occupied" ? "active" : ""} onClick={() => setFilter("occupied")}>BUSY / {16-openCount}</button></div></div>
 
-      <div className="case-board">{visibleCases.map(({group,index,entries}) => <article className="case-row" key={group.name}>
+      {mode === "guest" ? <div className="quick-board">{quickBooths.map(booth => <button key={booth.id} className={availability[booth.id] ? "quick-open" : "quick-busy"} onClick={() => setDetailBoothId(booth.id)}><span className="quick-number">{String(booth.number).padStart(2,"0")}</span><i>{booth.icon}</i><b>{booth.short}</b><small>BOOTH {booth.wing}</small><em><span/>{availability[booth.id] ? "OPEN" : "BUSY"}</em></button>)}</div> : <div className="case-board">{visibleCases.map(({group,index,entries}) => <article className="case-row" key={group.name}>
         <div className="case-file"><span>CASE {String(index+1).padStart(2,"0")}</span><i>{group.icon}</i></div><div className="case-name"><small>{group.clue}</small><h3>{group.name}</h3><p>{entries.length === 2 ? "TWO PARALLEL BOOTHS" : "FILTERED RESULT"}</p></div><div className="case-wings">{entries.map(booth => {const available=availability[booth.id],busy=updating===booth.id;return <button key={booth.id} className={available ? "wing-open" : "wing-busy"} disabled={mode!=="master"||busy} onClick={()=>toggleBooth(booth.id)}><span>BOOTH {booth.wing}</span><strong><i/>{busy?"UPDATING":available?"AVAILABLE":"OCCUPIED"}</strong>{mode==="master"&&<small>TAP TO CHANGE</small>}</button>})}</div>
-      </article>)}</div>
-      {!visibleCases.length && <div className="no-cases"><b>NO MATCHING CASES</b><p>Change the status filter to continue.</p></div>}
+      </article>)}</div>}
+      {(mode === "guest" ? !quickBooths.length : !visibleCases.length) && <div className="no-cases"><b>NO MATCHING CASES</b><p>Change the status filter to continue.</p></div>}
     </section>
+    {detailBooth && <div className="detail-backdrop" onClick={() => setDetailBoothId(null)}><section className={`booth-detail ${availability[detailBooth.id] ? "open" : "busy"}`} onClick={event => event.stopPropagation()}><button className="detail-close" onClick={() => setDetailBoothId(null)} aria-label="Close">×</button><span className="detail-code">CASE STATION {String(detailBooth.number).padStart(2,"0")}</span><i className="detail-icon">{detailBooth.icon}</i><h2>{detailBooth.name}</h2><p>BOOTH {detailBooth.wing}</p><div><span/><strong>{availability[detailBooth.id] ? "AVAILABLE NOW" : "CURRENTLY OCCUPIED"}</strong></div><small>{availability[detailBooth.id] ? "This booth is ready for your team." : "Choose another green booth and return later."}</small></section></div>}
     <footer className="crime-footer"><span>SYSTEM ONLINE</span><p>Trust the evidence. Question everyone.</p><b>MM / 2026</b></footer>
   </main>;
 }
