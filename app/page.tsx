@@ -131,30 +131,25 @@ export default function Home() {
     </section>
     {detailBooth && <div className="detail-backdrop" onClick={() => setDetailBoothId(null)}><section className={`booth-detail ${availability[detailBooth.id] ? "open" : "busy"}`} onClick={event => event.stopPropagation()}><button className="detail-close" onClick={() => setDetailBoothId(null)} aria-label="Close">×</button><span className="detail-code">CASE STATION {String(detailBooth.number).padStart(2,"0")}</span><i className="detail-icon">{detailBooth.icon}</i><h2>{detailBooth.name}</h2><p>BOOTH {detailBooth.wing}</p><div><span/><strong>{availability[detailBooth.id] ? "AVAILABLE NOW" : "CURRENTLY OCCUPIED"}</strong></div><small>{availability[detailBooth.id] ? "This booth is ready for your team." : "Choose another green booth and return later."}</small></section></div>}
     </>}
-    {mode === "map" && <VenueMap/>}
+    {mode === "map" && <VenueMap availability={availability}/>}
     <footer className="crime-footer"><span>SYSTEM ONLINE</span><p>Trust the evidence. Question everyone.</p><b>MM / 2026</b></footer>
   </main>;
 }
 
-function VenueMap(){
-  const Booth=({name,wing}:{name:string,wing:"A"|"B"})=><div className={`map-booth wing-${wing.toLowerCase()}`}><small>{wing} BOOTH</small><b>{name}</b></div>;
+function VenueMap({availability}:{availability:Record<string,boolean>}){
+  const Booth=({game,label,wing,className}:{game:string,label:string,wing:"A"|"B",className:string})=>{const booth=booths.find(item=>item.name===game&&item.wing===wing)!;const open=availability[booth.id];return <div className={`precision-booth ${open?"map-open":"map-busy"} ${className}`}><small>{wing} · {open?"AVAILABLE":"OCCUPIED"}</small><b>{label}</b><i/></div>};
   return <section className="map-page">
-    <header className="map-intro"><span>VENUE INTELLIGENCE</span><h1>Find the crime scene.</h1><p>A booths are marked in green. B booths are marked in amber. Swipe sideways on a phone to inspect the full floor plan.</p></header>
-    <div className="map-legend"><span><i className="legend-a"/> A booths · top half</span><span><i className="legend-b"/> B booths · bottom half</span><span><i className="legend-service"/> Event services</span></div>
-    <div className="venue-scroll"><div className="venue-plan">
-      <article className="floor badminton-floor"><h2>BADMINTON COURT</h2><div className="court-map">
-        <div className="service supervisors">SUPERVISORS</div><div className="service stage">STAGE</div>
-        <div className="left-a"><Booth name="Evidence Relay" wing="A"/><Booth name="Blind Vault Heist" wing="A"/><Booth name="Secret Sketch" wing="A"/><Booth name="Crime Scene" wing="A"/></div>
-        <div className="right-a"><Booth name="Casino" wing="A"/><Booth name="Forensics Lab" wing="A"/></div>
-        <div className="left-b"><Booth name="Evidence Relay" wing="B"/><Booth name="Blind Vault Heist" wing="B"/><Booth name="Secret Sketch" wing="B"/></div>
-        <div className="right-b"><Booth name="Crime Scene" wing="B"/><Booth name="Casino" wing="B"/><Booth name="Forensics Lab" wing="B"/></div>
-        <div className="service fnb">F&amp;B</div>
+    <header className="map-intro"><span>VENUE INTELLIGENCE</span><h1>Find the crime scene.</h1><p>The layout follows the official floor plan. Booth borders change live: green means available and red means occupied.</p></header>
+    <div className="map-legend"><span><i className="legend-open"/> Available booth</span><span><i className="legend-busy"/> Occupied booth</span><span><i className="legend-service"/> Event services</span></div>
+    <div className="venue-scroll"><div className="precision-map">
+      <article className="precision-floor badminton-precision"><h2>BADMINTON COURT</h2><div className="badminton-plan">
+        <div className="map-service map-supervisors">SUPERVISORS</div><div className="map-service map-stage">STAGE</div><div className="court-label">BADMINTON COURT</div>
+        <Booth game="The Evidence Relay" label="Evidence Relay" wing="A" className="evidence-a"/><Booth game="The Underground Casino" label="Casino" wing="A" className="casino-a"/><Booth game="The Blind Vault Heist" label="Blind Vault Heist" wing="A" className="vault-a"/><Booth game="The Forensics Lab" label="Forensics Lab" wing="A" className="forensics-a"/><Booth game="The Secret Sketch" label="Secret Sketch" wing="A" className="sketch-a"/><Booth game="The Crime Scene Memory" label="Crime Scene" wing="B" className="crime-b"/><Booth game="The Crime Scene Memory" label="Crime Scene" wing="A" className="crime-a"/><Booth game="The Underground Casino" label="Casino" wing="B" className="casino-b"/><Booth game="The Evidence Relay" label="Evidence Relay" wing="B" className="evidence-b"/><Booth game="The Forensics Lab" label="Forensics Lab" wing="B" className="forensics-b"/><Booth game="The Blind Vault Heist" label="Blind Vault Heist" wing="B" className="vault-b"/><Booth game="The Secret Sketch" label="Secret Sketch" wing="B" className="sketch-b"/>
+        <div className="map-service map-fnb-left">F&amp;B</div><div className="map-service map-fnb-bottom">F&amp;B</div>
       </div></article>
-      <article className="floor lounge-floor"><h2>STUDENT LOUNGE · SC103</h2><div className="lounge-map">
-        <div className="lounge-a"><Booth name="Telephone Witness" wing="A"/><Booth name="Locked Study" wing="A"/></div>
-        <div className="service registration">REGISTRATION</div>
-        <div className="lounge-b"><Booth name="Telephone Witness" wing="B"/><Booth name="Locked Study" wing="B"/></div>
-        <div className="service bag">BAG LOCKER</div>
+      <article className="precision-floor lounge-precision"><h2>STUDENT LOUNGE · SC103</h2><div className="student-plan">
+        <div className="map-service map-registration">REGISTRATION</div><div className="student-label">SC103</div><div className="map-service sc103a">SC103A</div><div className="map-service map-bag">BAG LOCKER</div>
+        <Booth game="The Telephone Witness" label="Telephone Witness" wing="A" className="telephone-a"/><Booth game="The Locked Study" label="Locked Study" wing="A" className="study-a"/><Booth game="The Telephone Witness" label="Telephone Witness" wing="B" className="telephone-b"/><Booth game="The Locked Study" label="Locked Study" wing="B" className="study-b"/>
       </div></article>
     </div></div>
   </section>;
