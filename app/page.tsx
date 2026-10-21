@@ -3,164 +3,117 @@
 import { useEffect, useMemo, useState } from "react";
 import "./ign.css";
 
-type Role = "leader" | "master";
-type Tab = "leaderboard" | "scoring" | "availability" | "buffers" | "checklist" | "map";
-type ScoreRow = { team: number; game: string; total: number; notes?: string; breakdown?: Record<string,number>; updated_at?: string };
+type Mode = "guest" | "master";
+type Filter = "all" | "open" | "occupied";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://bltyvdocczegpbkglnof.supabase.co";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_mKReDjUk7ZbsR8HTB5-LuQ_-zGlA0dB";
-const SCORE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1JJDUz5zL-HEsCZaofq2Ycla6DSet-F4DFSQeJ90BluY/edit?usp=sharing";
 
-const teams = Array.from({ length: 16 }, (_, i) => i + 1);
-
-const games = [
-  { id:"tokyo", country:"Japan", name:"Tokyo Tip-Toe", venue:"Badminton Court 1", time:"12 min", max:40, penalties:true, icon:"🟨", color:"#f6c453", criteria:[["Part 1 - Tokyo Tip-Toe",10],["Part 2 - Don't Touch the Flag Colours",10],["Teamwork",10],["Speed & Accuracy",10]], rules:["Game format: Play five rounds for Part 1, then five rounds for Part 2.","Score each part: 9-10 correct = 10 points; 7-8 = 8; 5-6 = 6; 3-4 = 4; 1-2 = 2; none correct = 0.","Warning: Give one verbal warning before applying any deductions.","Penalties: After the warning, deduct 2 points for a forbidden colour, exceeding three seconds, touching multiple papers, taking turns incorrectly, or outside interference."] },
-  { id:"dodo", country:"Mauritius", name:"Dodo Ring Relay", venue:"Badminton Court 1", time:"12 min", max:40, penalties:true, timingFields:["Completion time"], icon:"⭕", color:"#ff7b68", criteria:[["Completion & Speed",15],["Coordination & Technique",15],["Team Spirit & Enthusiasm",10]], rules:["Complete three full rotations within the two-minute hard cap.","Breaking the hand-chain does not end the game; continue and apply the penalty.","Deduct 15 per broken chain, 2 when the hoop is not passed head-to-toe, 5 for deliberately skipping a participant, and 2 for unsportsmanlike behaviour."] },
-  { id:"safari", country:"Africa", name:"Safari Express", venue:"Badminton Court 1", time:"12 min", max:40, penalties:true, icon:"🦒", color:"#f09b45", criteria:[["Round 1",10],["Round 2",10],["Round 3",10],["Performance Bonus",10]], rules:["If the group is split into two, take the average score of both groups.","Each round: exact animal = 10 points; close or related animal = 4 at the Game Master's discretion; incorrect or no answer = 0.","Performance Bonus: excellent 9-10; good 7-8; satisfactory 5-6; needs improvement 0-4.","Assess smooth transitions, expressive body language, equal participation, focus, cooperation and efficient rotation.","Give one verbal warning before deductions. Speaking, whispering, mouthing words, animal sounds, turning early, spelling, or pointing to reveal the answer = -2 each."] },
-  { id:"monsoon", country:"Brunei", name:"Monsoon Winds", venue:"Badminton Court 2", time:"12 min", max:40, calculation:"average", timingFields:["Round 1 survival time","Round 2 survival time"], icon:"🎈", color:"#58aee8", criteria:[["Round 1 Score",40],["Round 2 Score",40]], rules:["Play two five-minute rounds; the final score is the average of both round scores.","Per round: 5:00 = 40; 4:00-4:59 = 30; 3:00-3:59 = 20; 2:00-2:59 = 10; under 2:00 = 0. Deduct 5 for each dropped balloon.","Catching or holding a balloon, tapping the same balloon twice consecutively, or leaving the boundary ends the round. A dropped balloon is removed but does not end the round."] },
-  { id:"marble", country:"Indonesia", name:"Bali Balance", venue:"Badminton Court 2", time:"12 min", max:40, icon:"🥄", color:"#e86b59", criteria:[["Challenge Completion",10],["Marble Control",10],["Teamwork",10],["Rule Adherence",5],["Participation",5]], rules:["If the group is split into two, take the average score of both groups.","Challenge Completion: all complete = 10; one incomplete = 8; two-three incomplete = 6; four-five incomplete = 4; more than five incomplete = 0-2.","Marble Control: 0 drops = 10; 1 = 8; 2 = 6; 3 = 4; 4 = 2; 5 or more = 0.","Teamwork: excellent 9-10; good 7-8; satisfactory 5-6; needs improvement 0-4.","Participation: every participant active = 5; most active = 4; limited engagement = 2-3; several disengaged = 0-1.","Rule Adherence starts at 5. Deduct 1 for touching the marble by hand except retrieval, removing the spoon from the mouth, changing a challenge, or passing other than spoon-to-spoon. Minimum 0."] },
-  { id:"golden", country:"Myanmar", name:"Golden Order", venue:"Badminton Court 2", time:"12 min", max:40, icon:"↔️", color:"#e4a93e", criteria:[["Round Completion",10],["Accuracy",10],["Creativity & Problem Solving",5],["Teamwork",10],["Rule Adherence",5]], rules:["If the group is split into two, take the average score of both groups.","Round Completion: three rounds = 10; two = 7; one = 4; zero = 0.","Accuracy starts at 10. Deduct 0.5 for each participant in an incorrect position across all rounds; minimum 0.","Teamwork: excellent 9-10; good 7-8; satisfactory 5-6; needs improvement 0-4. Communication must remain non-verbal.","Creativity & Problem Solving: excellent = 5; good = 4; satisfactory = 2-3; needs improvement = 0-1.","Rule Adherence starts at 5. Speaking or whispering = -1; writing or electronic devices = -2; ignoring instructions = -1. Minimum 0."] },
-  { id:"island", country:"Maldives", name:"Hula Hoop Pass", venue:"Futsal Field", time:"12 min", max:40, timingFields:["Completion time"], icon:"⭕", color:"#28b9aa", criteria:[["Completion Time",10],["Challenge Completion",15],["Teamwork & Coordination",15]], rules:["Pass the hula hoop for one complete rotation around the team circle without letting go of hands.","The maximum time allowed is 12 minutes.","Tie-break order: fastest time, Challenge Completion, then Teamwork & Coordination."] },
-  { id:"galaxy", country:"Sri Lanka", name:"Galaxy Escape", venue:"Futsal Field", time:"10 min", max:40, timingFields:["Completion time"], icon:"🪐", color:"#8067e8", criteria:[["Completion Time",10],["Accuracy Score",15],["Completion",5],["Teamwork & Coordination",10]], rules:["Navigate the maze without touching ropes or obstacles; each touch requires that participant to restart.","The maximum completion time is 10 minutes.","Tie-break order: fastest time, fewer obstacle touches, then Teamwork & Coordination."] },
-  { id:"cups", country:"India × Nepal", name:"Himalayan Hustle", venue:"Dance Studio", time:"12 min", max:40, calculation:"average", icon:"🥤", color:"#dc6f9e", criteria:[["Round 1 Score",40],["Round 2 Score",40]], rules:["Play two five-minute rounds; the final score is the average of both round scores.","Each correct arrangement earns 4 points, capped at 40 per round. Deduct 2 for each dropped-cup incident.","Incorrect or incomplete arrangements do not count; dropped cups are reset and play continues."] },
-  { id:"art", country:"Pakistan", name:"Rang-E-Pakistan", venue:"Dance Studio", time:"10 min", max:40, icon:"🎨", color:"#53a66e", criteria:[["Final Drawing Accuracy",20],["Instruction Accuracy",5],["Communication",5],["Teamwork",5],["Rule Adherence",5]], rules:["Only the designated participant may view and describe the prompt; the object name cannot be said.","Team members draw in their assigned turns and may not touch another player's marker or drawing.","Rule Adherence starts at 5; apply the deductions in the official guide, with a minimum of 0."] },
-  { id:"blackhole", country:"Bangladesh", name:"Delta Dash", venue:"Dance Studio", time:"10 min", max:40, timingFields:["Completion time"], icon:"🕳️", color:"#5f6578", criteria:[["Completion Time",10],["Accuracy Score",15],["Completion",5],["Teamwork & Coordination",10]], rules:["Three blindfolded participants take turns through the obstacle course using verbal guidance only.","After the course, each participant throws the ball into the selected Delta Dash bucket.","The maximum time is 10 minutes; record obstacle touches and completion details in the notes."] },
+const boothGroups = [
+  { name: "The Underground Casino", icon: "♠", clue: "HIGH STAKES", booths: ["A", "B"] },
+  { name: "The Evidence Relay", icon: "⌁", clue: "CHAIN OF CUSTODY", booths: ["A", "B"] },
+  { name: "The Forensics Lab", icon: "⌕", clue: "TRACE THE TRUTH", booths: ["A", "B"] },
+  { name: "The Secret Sketch", icon: "✎", clue: "DRAW THE SUSPECT", booths: ["A", "B"] },
+  { name: "The Crime Scene Memory", icon: "◉", clue: "NOTICE EVERYTHING", booths: ["A", "B"] },
+  { name: "The Blind Vault Heist", icon: "◇", clue: "TRUST YOUR CREW", booths: ["A", "B"] },
+  { name: "The Telephone Witness", icon: "☏", clue: "PASS THE TESTIMONY", booths: ["A", "B"] },
+  { name: "The Locked Study", icon: "⚿", clue: "ESCAPE THE ROOM", booths: ["A", "B"] },
 ] as const;
 
-const buffers = [
-  { id:"rally", name:"Rally Rakyat", country:"Malaysia", icon:"🪶", venue:"Student Lounge", always:false, rules:"Complete the Malaysia team activity while waiting for the next available graded station." },
-  { id:"scroll", name:"The Endless Scroll", country:"China", icon:"📜", venue:"Student Lounge", always:false, rules:"Draw word-sticks and build one connected story, one sentence per person." },
-  { id:"medicine", name:"The Medicine Room", country:"Korea", icon:"🌿", venue:"Student Lounge", always:false, rules:"Memorise the herb chart, then select a safe prescription for the patient card." },
-  { id:"media", name:"Media Activity", country:"MUISS", icon:"📸", venue:"Media Zone", always:true, rules:"Complete the event media prompt with your team. This zone is always open." },
-] as const;
+const booths = boothGroups.flatMap((group, groupIndex) => group.booths.map((wing, wingIndex) => ({
+  id: `october-booth-${String(groupIndex * 2 + wingIndex + 1).padStart(2, "0")}`,
+  number: groupIndex * 2 + wingIndex + 1,
+  name: group.name,
+  wing,
+  icon: group.icon,
+  clue: group.clue,
+})));
 
-const venueById:Record<string,string> = {tokyo:"Badminton Court",scroll:"Badminton Court",dodo:"Badminton Court",cups:"Badminton Court",art:"Badminton Court",safari:"Badminton Court",golden:"Badminton Court",galaxy:"Student Lounge",blackhole:"Student Lounge",medicine:"Student Lounge",rally:"Dance Studio",island:"Dance Studio",monsoon:"Dance Studio",marble:"Dance Studio",media:"Media Zone"};
-const venueFor=(id:string,fallback:string)=>venueById[id]||fallback;
-const timingMaxMinutes:Record<string,number>={dodo:2,monsoon:5,island:12,galaxy:10,blackhole:10};
+const initialAvailability = Object.fromEntries(booths.map(booth => [booth.id, true]));
 
-const flowGameIds=["tokyo","dodo","golden","safari","art","cups","galaxy","blackhole","island","monsoon","marble"];
-const flowBooths=[
-  ...flowGameIds.map(id=>({...games.find(game=>game.id===id)!,graded:true})),
-  ...Array.from({length:5},(_,index)=>({id:`flow-buffer-${index+1}`,country:"BUFFER ZONE",name:`Buffer ${index+1}`,venue:"Buffer Zone",icon:"⏱",graded:false}))
-];
-
-const initialAvailability = Object.fromEntries([...games, ...buffers].map(g => [g.id, true]));
-function rotation(team:number) { return flowBooths.map((_, i) => ({ game:flowBooths[(team - 1 + i) % flowBooths.length] })); }
-
-async function supabase(path:string, init?:RequestInit) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...init, headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal", ...(init?.headers || {}) } });
+async function supabase(path: string, init?: RequestInit) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal", ...(init?.headers || {}) },
+  });
   const body = await response.text();
   if (!response.ok) throw new Error(body || `Supabase request failed (${response.status})`);
   return body ? JSON.parse(body) : null;
 }
 
 export default function Home() {
-  const [role,setRole] = useState<Role>("leader");
-  const [tab,setTab] = useState<Tab>("leaderboard");
-  const [team,setTeam] = useState(1);
-  const [scores,setScores] = useState<ScoreRow[]>([]);
-  const [availability,setAvailability] = useState<Record<string,boolean>>(initialAvailability);
-  const [checks,setChecks] = useState<Record<string,boolean>>({});
-  const [sync,setSync] = useState("Connecting…");
-  const [scoreGame,setScoreGame] = useState<string>(games[0].id);
-  const [draft,setDraft] = useState<Record<string,number>>({});
-  const [timings,setTimings] = useState<Record<string,string>>({});
-  const [notes,setNotes] = useState("");
-  const [saving,setSaving] = useState(false);
-  const [celebrate,setCelebrate] = useState(false);
-  const [detailTeam,setDetailTeam] = useState<number|null>(null);
-  const [showValidation,setShowValidation] = useState(false);
-  const [confirmReplacement,setConfirmReplacement] = useState(false);
-  const [notesReady,setNotesReady] = useState(true);
+  const [mode, setMode] = useState<Mode>("guest");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [availability, setAvailability] = useState<Record<string, boolean>>(initialAvailability);
+  const [sync, setSync] = useState("Connecting…");
+  const [updating, setUpdating] = useState<string | null>(null);
 
-  useEffect(() => { (async()=>{ try {
-    let s; try { s=await supabase("scores?select=team,game,total,notes,breakdown,updated_at"); } catch { setNotesReady(false); s=await supabase("scores?select=team,game,total,updated_at"); }
-    const [a,c] = await Promise.all([supabase("game_availability?select=game,available"),supabase("checklist?select=team,game,complete")]);
-    setScores(s || []); if(a?.length) setAvailability(v=>({...v,...Object.fromEntries(a.map((x:{game:string,available:boolean})=>[x.game,x.available]))}));
-    if(c?.length) setChecks(Object.fromEntries(c.map((x:{team:number,game:string,complete:boolean})=>[`${x.team}-${x.game}`,x.complete]))); setSync("Live sync");
-  } catch { setSync("Setup needed"); } })(); },[]);
+  async function loadAvailability(silent = false) {
+    if (!silent) setSync("Checking booths…");
+    try {
+      const rows = await supabase("game_availability?select=game,available");
+      if (rows?.length) {
+        const live = Object.fromEntries(rows.map((row: { game: string; available: boolean }) => [row.game, row.available]));
+        setAvailability(current => ({ ...current, ...live }));
+      }
+      setSync("Live now");
+    } catch { setSync("Connection unavailable"); }
+  }
 
-  useEffect(()=>{
-    const refreshScores=async()=>{try{let latest;try{latest=await supabase("scores?select=team,game,total,notes,breakdown,updated_at")}catch{latest=await supabase("scores?select=team,game,total,updated_at")}setScores(latest||[])}catch{/* Keep the last known scores during a brief connection issue. */}};
-    const refreshWhenVisible=()=>{if(document.visibilityState==="visible")refreshScores()};
-    const timer=window.setInterval(refreshWhenVisible,8000);
-    window.addEventListener("focus",refreshWhenVisible);
-    document.addEventListener("visibilitychange",refreshWhenVisible);
-    return()=>{window.clearInterval(timer);window.removeEventListener("focus",refreshWhenVisible);document.removeEventListener("visibilitychange",refreshWhenVisible)};
-  },[]);
+  useEffect(() => {
+    loadAvailability();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") loadAvailability(true); }, 8000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  useEffect(()=>{if(detailTeam===null)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setDetailTeam(null)};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close)},[detailTeam]);
+  async function toggleBooth(id: string) {
+    if (mode !== "master" || updating) return;
+    const next = !availability[id];
+    setUpdating(id);
+    setAvailability(current => ({ ...current, [id]: next }));
+    try {
+      await supabase("game_availability?on_conflict=game", { method: "POST", body: JSON.stringify({ game: id, available: next }) });
+      setSync("Board updated");
+    } catch {
+      setAvailability(current => ({ ...current, [id]: !next }));
+      setSync("Could not update");
+    } finally { setUpdating(null); }
+  }
 
-  const gradedScores = useMemo(()=>scores.filter(score=>games.some(game=>game.id===score.game)),[scores]);
-  const leaderboard = useMemo(()=>teams.map(t=>({team:t,total:gradedScores.filter(s=>s.team===t).reduce((n,s)=>n+s.total,0),played:gradedScores.filter(s=>s.team===t).length})).sort((a,b)=>b.total-a.total||b.played-a.played||a.team-b.team),[gradedScores]);
-  const selectedGame = games.find(g=>g.id===scoreGame)!;
-  const existingScore = scores.find(s=>s.team===team&&s.game===scoreGame);
-  const hasPenalties = "penalties" in selectedGame && selectedGame.penalties;
-  const usesAverage = "calculation" in selectedGame && selectedGame.calculation==="average";
-  const missingCriteria = selectedGame.criteria.filter(([name])=>draft[name]===undefined).map(([name])=>name);
-  const missingTimings = "timingFields" in selectedGame?selectedGame.timingFields.filter(label=>!/^(?:\d{1,2}):[0-5]\d$/.test(timings[label]?.trim()||"")):[];
-  const timingSummary = Object.entries(timings).filter(([,value])=>value.trim()).map(([label,value])=>`${label}: ${value.trim()}`).join(" · ");
-  const rawSubtotal = selectedGame.criteria.reduce((n,[name,max])=>n+Math.min(max,Math.max(0,draft[name]||0)),0);
-  const subtotal = usesAverage?rawSubtotal/selectedGame.criteria.length:rawSubtotal;
-  const draftTotal = Math.max(0,subtotal-(hasPenalties?Math.max(0,draft.Penalties||0):0));
-  const pages:{id:Tab;label:string;icon:string;access:"both"|Role}[] = [
-    {id:"leaderboard",label:"Leaderboard",icon:"🏆",access:"both"},{id:"scoring",label:"Scoring",icon:"✦",access:"master"},{id:"availability",label:"Availability",icon:"◉",access:"both"},{id:"buffers",label:"Buffer zones",icon:"⏱",access:"leader"},{id:"checklist",label:"Flow plan",icon:"✓",access:"both"},{id:"map",label:"Map",icon:"⌖",access:"both"}
-  ];
-  const visiblePages=pages.filter(p=>p.access==="both"||p.access===role);
-  useEffect(()=>{if(!visiblePages.some(p=>p.id===tab))setTab("leaderboard")},[role]);
-  useEffect(()=>{ setDraft({}); setTimings({}); setNotes(""); setShowValidation(false); setConfirmReplacement(false); },[team,scoreGame]);
+  const openCount = booths.filter(booth => availability[booth.id]).length;
+  const visibleBooths = useMemo(() => booths.filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true), [filter, availability]);
 
-  function setTimingPart(label:string,part:"minutes"|"seconds",value:string){const [minutes="",seconds=""]=(timings[label]||":").split(":");const nextMinutes=part==="minutes"?value:minutes,nextSeconds=part==="seconds"?value:seconds;setTimings(current=>({...current,[label]:`${nextMinutes}:${nextSeconds}`}))}
+  return <main className="masquerade-shell">
+    <header className="masquerade-header">
+      <div className="crest" aria-hidden="true"><span>☾</span></div>
+      <div className="event-title"><p>MUISS × SASS · OCTOBER INTAKE</p><h1>Murder <i>Masquerade</i></h1><span>International Games Night 2026</span></div>
+      <div className="mode-switch" aria-label="Viewing mode"><button className={mode === "guest" ? "active" : ""} onClick={() => setMode("guest")}>Guest view</button><button className={mode === "master" ? "active" : ""} onClick={() => setMode("master")}>Game Master</button></div>
+    </header>
 
-  async function saveScore(confirmed=false){ if(saving)return;if(missingCriteria.length||missingTimings.length){setShowValidation(true);setSync("Complete required fields");return}if(existingScore&&!confirmed){setConfirmReplacement(true);return}setConfirmReplacement(false);setSaving(true); const timingText=Object.entries(timings).filter(([,value])=>value.trim()).map(([label,value])=>`${label}: ${value.trim()}`).join(" · "); const combinedNotes=[timingText,notes.trim()].filter(Boolean).join(" · "); const row={team,game:scoreGame,total:draftTotal,notes:combinedNotes,breakdown:draft,updated_at:new Date().toISOString()}; try{await supabase("scores?on_conflict=team,game",{method:"POST",body:JSON.stringify({team,game:scoreGame,total:draftTotal,updated_at:row.updated_at})});setScores(v=>[...v.filter(s=>!(s.team===team&&s.game===scoreGame)),row]);let savedMessage=existingScore?"Score updated":"Saved live";if(notesReady){try{await supabase(`scores?team=eq.${team}&game=eq.${scoreGame}`,{method:"PATCH",body:JSON.stringify({notes:row.notes,breakdown:row.breakdown,updated_at:row.updated_at})})}catch{setNotesReady(false);savedMessage="Score saved · notes setup needed"}}setDraft({});setTimings({});setNotes("");setShowValidation(false);setSync(savedMessage);setCelebrate(true);window.setTimeout(()=>setCelebrate(false),1800)}catch(error){setSync(error instanceof Error?`Could not save: ${error.message}`:"Could not save")}finally{setSaving(false)} }
-  async function resetScore(){ if(!existingScore||saving)return; setSaving(true); setScores(v=>v.filter(s=>!(s.team===team&&s.game===scoreGame))); setDraft({});setTimings({});setNotes("");try{await supabase(`scores?team=eq.${team}&game=eq.${scoreGame}`,{method:"DELETE"});setSync("Score reset")}catch{setSync("Could not reset")}finally{setSaving(false)} }
-  async function toggleAvailability(id:string){ if(role!=="master"||id==="media")return; const available=!availability[id]; setAvailability(v=>({...v,[id]:available})); try{await supabase("game_availability?on_conflict=game",{method:"POST",body:JSON.stringify({game:id,available})});setSync("Saved live")}catch{setSync("Saved in preview")} }
-  async function toggleCheck(id:string){const key=`${team}-${id}`,complete=!checks[key];setChecks(v=>({...v,[key]:complete}));try{await supabase("checklist?on_conflict=team,game",{method:"POST",body:JSON.stringify({team,game:id,complete})});setSync("Saved live")}catch{setSync("Saved in preview")} }
+    <section className="availability-page">
+      <div className="intro-card">
+        <div className="intro-copy"><span className="kicker">CASE FILE 01 · LIVE BOOTH BOARD</span><h2>Choose your next <em>investigation.</em></h2><p>{mode === "master" ? "Tap any booth card to mark it available or occupied. Every device updates automatically." : "Find an available booth, gather your team and follow the clues. This board refreshes automatically."}</p></div>
+        <div className="availability-tally" aria-label={`${openCount} of 16 booths available`}><strong>{openCount}</strong><span>of 16</span><small>available now</small></div>
+        <div className="mask-mark" aria-hidden="true">◡</div>
+      </div>
 
-  return <div className="shell">
-    <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">I</span><div><strong>IGN</strong><small>2026</small></div></div>
-      <div className="role-switch"><button className={role==="leader"?"active":""} onClick={()=>setRole("leader")}>Team Leader</button><button className={role==="master"?"active":""} onClick={()=>setRole("master")}>Game Master</button></div>
-      <nav>{visiblePages.map(p=><button key={p.id} className={tab===p.id?"active":""} onClick={()=>setTab(p.id)}><span>{p.icon}</span>{p.label}</button>)}</nav>
-    </aside>
-    <main>
-      {celebrate&&<div className="save-celebration" role="status"><span>✦</span><strong>Score saved!</strong><span>✦</span></div>}
-      <header className="topbar"><div><p>MUISS × SASS INTERNATIONAL GAMES NIGHT</p><h1>{pages.find(p=>p.id===tab)?.label}</h1></div><div className="header-actions"><div className="mobile-role"><button className={role==="leader"?"active":""} onClick={()=>setRole("leader")}>Leader</button><button className={role==="master"?"active":""} onClick={()=>setRole("master")}>Master</button></div><span className={`sync ${sync.includes("Live")||sync.includes("Saved")||sync.includes("updated")||sync.includes("reset")?"ok":""}`}>{sync}</span><label>Viewing team<select value={team} onChange={e=>setTeam(Number(e.target.value))}>{teams.map(t=><option key={t} value={t}>Team {String(t).padStart(2,"0")}</option>)}</select></label></div></header>
+      <div className="board-toolbar">
+        <div className="filters" aria-label="Filter booths"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All <b>16</b></button><button className={filter === "open" ? "active" : ""} onClick={() => setFilter("open")}>Available <b>{openCount}</b></button><button className={filter === "occupied" ? "active" : ""} onClick={() => setFilter("occupied")}>Occupied <b>{16 - openCount}</b></button></div>
+        <button className="sync-status" onClick={() => loadAvailability()} aria-label="Refresh booth availability"><i className={sync === "Live now" || sync === "Board updated" ? "live" : ""}/>{sync}<span>↻</span></button>
+      </div>
 
-      {tab==="leaderboard"&&<section className="page"><div className="hero"><div><span className="eyebrow">THE GLOBAL CIRCUIT</span><h2>Play the world.<br/><em>Top the board.</em></h2><p>Eleven graded games. Sixteen teams. One night to remember.</p></div><div className="hero-orbit"><span>16</span><small>TEAMS</small></div></div><div className="stats"><article><span>🎮</span><div><b>11</b><small>Graded games</small></div></article><article><span>⏸</span><div><b>5</b><small>Buffer stops</small></div></article><article><span>✓</span><div><b>{scores.length}</b><small>Scores submitted</small></div></article></div><div className="panel"><div className="panel-title"><div><span className="eyebrow">LIVE RANKING</span><h3>Leaderboard</h3></div><span>Tap a team for full details</span></div><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Team</th><th>Games</th><th>Total points</th></tr></thead><tbody>{leaderboard.map((r,i)=><tr key={r.team}><td><span className={`rank r${i+1}`}>{i+1}</span></td><td><button className="team-link" onClick={()=>setDetailTeam(r.team)}>Team {String(r.team).padStart(2,"0")}<small>View game details →</small></button></td><td>{r.played}/11</td><td><strong>{r.total}</strong></td></tr>)}</tbody></table></div></div></section>}
+      {mode === "master" && <div className="master-note"><span>✦</span><div><b>Game Master controls are active</b><small>Tap a booth to switch its status. Changes go live for everyone.</small></div></div>}
 
-      {tab==="scoring"&&<section className="page scoring-page"><StationDashboard game={selectedGame} scores={gradedScores} selectedTeam={team} onSelect={setTeam}/><div className="split"><div><div className="panel score-panel"><div className="panel-title"><div><span className="eyebrow">GAME MASTER ENTRY</span><h3>{existingScore?"Enter a replacement score":"Record a score"}</h3></div><span className={existingScore?"saved-pill":""}>{existingScore?`Saved: ${existingScore.total} pts`:"New result"}</span></div>{!notesReady&&<div className="schema-note">Scores will save. Run the Supabase notes upgrade to also save notes and detailed breakdowns.</div>}<div className="form-grid"><label>Team<select value={team} onChange={e=>setTeam(Number(e.target.value))}>{teams.map(t=><option key={t} value={t}>Team {String(t).padStart(2,"0")}</option>)}</select></label><label>Game<select value={scoreGame} onChange={e=>setScoreGame(e.target.value)}>{games.map(g=><option value={g.id} key={g.id}>{g.country} · {g.name}</option>)}</select></label></div>{"timingFields" in selectedGame&&<div className="timing-panel manual-timing"><div className="timing-heading"><span>⏱</span><b>Completion time</b><small>Select minutes and seconds</small></div><div className="timing-inputs">{selectedGame.timingFields.map(label=>{const [minutes="",seconds=""]=(timings[label]||":").split(":");const invalid=showValidation&&missingTimings.includes(label);return <label key={label}><span>{label}</span><div className={`time-selects ${invalid?"invalid":""}`}><select aria-label={`${label} minutes`} value={minutes} onChange={e=>setTimingPart(label,"minutes",e.target.value)}><option value="">Minutes</option>{Array.from({length:(timingMaxMinutes[selectedGame.id]||59)+1},(_,value)=><option value={String(value).padStart(2,"0")} key={value}>{String(value).padStart(2,"0")} min</option>)}</select><b>:</b><select aria-label={`${label} seconds`} value={seconds} onChange={e=>setTimingPart(label,"seconds",e.target.value)}><option value="">Seconds</option>{Array.from({length:60},(_,value)=><option value={String(value).padStart(2,"0")} key={value}>{String(value).padStart(2,"0")} sec</option>)}</select></div>{invalid&&<small className="field-error">Select both minutes and seconds</small>}</label>})}</div></div>}{showValidation&&(missingCriteria.length>0||missingTimings.length>0)&&<div className="validation-note"><b>Complete the highlighted fields</b><span>{[...missingTimings,...missingCriteria].join(" · ")}</span></div>}<div className="criteria">{selectedGame.criteria.map(([name,max])=>{const invalid=showValidation&&missingCriteria.includes(name);return <label key={name}><span>{name}<small>Maximum {max}{invalid&&<i className="field-error">Required</i>}</small></span><input className={invalid?"invalid":""} inputMode="decimal" aria-label={`${name} score`} type="number" step="any" min="0" max={max} value={draft[name]??""} onChange={e=>setDraft(v=>({...v,[name]:Math.min(max,Math.max(0,Number(e.target.value)))}))}/></label>})}</div>{hasPenalties&&<label className="penalty-field"><span>Penalty deductions <small>Enter the total points to subtract</small></span><input inputMode="decimal" aria-label="Penalty deductions" type="number" step="any" min="0" value={draft.Penalties??""} onChange={e=>setDraft(v=>({...v,Penalties:Math.max(0,Number(e.target.value))}))}/></label>}<label className="notes-field"><span>Game Master notes <small>Optional — may be left empty</small></span><textarea maxLength={500} rows={3} placeholder="Optional: tie-break details, touches, penalties or exceptional play…" value={notes} onChange={e=>setNotes(e.target.value)}/></label><div className="total"><span>Calculated total<small>{hasPenalties?`${subtotal} subtotal − ${draft.Penalties||0} penalties`:usesAverage?"Average of both round scores":`Maximum ${selectedGame.max} points`}</small></span><strong>{draftTotal}<i> pts</i></strong></div>{showValidation&&(missingCriteria.length>0||missingTimings.length>0)&&<div className="validation-note validation-bottom"><b>Cannot submit yet</b><span>Complete {missingCriteria.length+missingTimings.length} highlighted field{missingCriteria.length+missingTimings.length===1?"":"s"} above.</span></div>}<div className="score-actions"><button className="primary" disabled={saving} onClick={()=>saveScore()}>{saving?"Saving…":existingScore?"Replace saved score":"Submit score"} →</button>{existingScore&&<button className="reset" disabled={saving} onClick={resetScore}>Reset score</button>}</div><p className="duplicate-note">After saving, the score fields, timing and optional notes are cleared. The saved result remains in the records below.</p></div></div><GameGuide game={selectedGame}/></div><ScoreRecords scores={gradedScores} selectedGameId={scoreGame}/></section>}
+      <div className="booth-grid">{visibleBooths.map(booth => {
+        const available = availability[booth.id];
+        const busy = updating === booth.id;
+        return <button key={booth.id} className={`booth-card ${available ? "available" : "occupied"} ${mode === "master" ? "editable" : ""}`} onClick={() => toggleBooth(booth.id)} disabled={mode !== "master" || busy} aria-label={`${booth.name} ${booth.wing}, ${available ? "available" : "occupied"}${mode === "master" ? ", tap to change" : ""}`}>
+          <span className="booth-number">{String(booth.number).padStart(2, "0")}</span><span className="booth-icon">{booth.icon}</span><span className="booth-copy"><small>{booth.clue}</small><b>{booth.name}</b><em>Booth {booth.wing}</em></span><span className="status-pill"><i/>{busy ? "Updating" : available ? "Available" : "Occupied"}</span>{mode === "master" && <span className="tap-hint">Tap to {available ? "pause" : "open"}</span>}
+        </button>;
+      })}</div>
 
-      {tab==="availability"&&<section className="page"><div className="notice"><span>◉</span><div><b>Live station status</b><p>{role==="master"?"Tap a station to open or pause it. Media Activity always stays open.":"Game Masters update this board. Choose the next open station with your team."}</p></div></div><div className="station-grid">{[...games,...buffers].map(g=>{const open=availability[g.id]||g.id==="media";return <button key={g.id} className={`station ${open?"open":"closed"}`} onClick={()=>toggleAvailability(g.id)} disabled={role!=="master"||g.id==="media"}><span className="station-icon">{g.icon}</span><div><small>{"country" in g?g.country:""}</small><b>{g.name}</b><em>{venueFor(g.id,g.venue)}</em></div><i>{open?"OPEN":"PAUSED"}</i></button>})}</div></section>}
-
-      {tab==="buffers"&&<section className="page"><div className="page-intro"><div><span className="eyebrow">ZERO POINTS · ALL ENERGY</span><h2>Buffer zones</h2><p>Use a buffer whenever your next station is occupied. These activities never affect the leaderboard.</p></div></div><div className="buffer-grid">{buffers.map(b=><article className={b.always?"featured":""} key={b.id}><div className="buffer-head"><span>{b.icon}</span><i>{b.always?"ALWAYS OPEN":availability[b.id]?"OPEN":"PAUSED"}</i></div><small>{b.country} · {venueFor(b.id,b.venue)}</small><h3>{b.name}</h3><p>{b.rules}</p><div className="ungraded">Not graded</div></article>)}</div></section>}
-
-      {tab==="checklist"&&<section className="page"><div className="check-head"><div><span className="eyebrow">TEAM {String(team).padStart(2,"0")} · 16-BOOTH FLOW</span><h2>{role==="master"?"Rotation reference":"Game checklist"}</h2><p>{role==="master"?"The approved T1-T16 flow plan for the selected team. This reference is read-only.":"Follow this exact station order. Scored games complete automatically; mark buffers or missing stations manually."}</p></div>{role==="leader"&&<div className="progress-ring"><strong>{rotation(team).filter(slot=>scores.some(s=>s.team===team&&s.game===slot.game.id)||checks[`${team}-${slot.game.id}`]).length}<small>/16</small></strong></div>}</div><div className="flow-key"><span><i className="game-key"/>Graded game</span><span><i className="buffer-key"/>Buffer stop</span><span><i className="done-key"/>Completed</span></div><div className="checklist flow-list">{rotation(team).map((slot,i)=>{const auto=slot.game.graded&&scores.some(s=>s.team===team&&s.game===slot.game.id),done=auto||checks[`${team}-${slot.game.id}`];return <button key={slot.game.id} className={`${done?"done ":""}${slot.game.graded?"game-step":"buffer-step"}`} disabled={role==="master"} onClick={()=>role==="leader"&&!auto&&toggleCheck(slot.game.id)}><span className="check">{done?"✓":i+1}</span><span className="game-icon">{slot.game.icon}</span><span><b>{slot.game.name}</b><small>{slot.game.country} · {venueFor(slot.game.id,slot.game.venue)}</small></span><em>{auto?"Scored":done?"Manual":slot.game.graded?"Game":"Buffer"}</em></button>})}</div></section>}
-
-      {tab==="map"&&<section className="page"><div className="map-layout"><div className="map-card"><div className="map-title"><span>MONASH SPORTS CENTRE</span><b>International Games Night · Floor plan</b></div><div className="actual-floor">
-        <section className="venue-map"><h3>BADMINTON COURT</h3><div className="venue-grid badminton-grid"><article className="support-zone">FIRST AID</article><article><b>Japan</b><small>Tokyo Tip-Toe</small></article><article className="buffer-zone"><b>China</b><small>The Endless Scroll · Buffer</small></article><article><b>Mauritius</b><small>Dodo Ring</small></article><article className="support-zone wide-support">SUPERVISORS &amp; COMPLAINTS</article><article><b>India × Nepal</b><small>Himalayan Hustle</small></article><article><b>Pakistan</b><small>Rang-E-Pakistan</small></article><article><b>Africa</b><small>Safari Express</small></article><article><b>Myanmar</b><small>Golden Order</small></article></div></section>
-        <section className="venue-map"><h3>STUDENT LOUNGE</h3><div className="venue-grid lounge-grid"><article className="large-zone"><b>Sri Lanka</b><small>Galaxy Escape</small></article><article><b>Bangladesh</b><small>Delta Dash</small></article><article className="buffer-zone"><b>Korea</b><small>The Medicine Room · Buffer</small></article><article className="support-zone"><b>Registration</b></article></div></section>
-        <section className="venue-map dance-map"><h3>DANCE STUDIO</h3><div className="venue-grid dance-grid"><article className="buffer-zone"><b>Malaysia</b><small>Rally Rakyat · Buffer</small></article><article><b>Maldives</b><small>Hula Hoop Pass</small></article><article><b>Brunei</b><small>Monsoon Winds</small></article><article><b>Indonesia</b><small>Bali Balance</small></article></div></section>
-        <div className="map-legend"><span><i/> Graded game</span><span><i/> Buffer zone</span><span><i/> Support area</span></div>
-      </div></div><div className="route"><span className="eyebrow">TEAM {String(team).padStart(2,"0")} FLOW</span><h3>Your station order</h3>{rotation(team).map((r,i)=><div key={r.game.id}><span>{i+1}</span><p><b>{r.game.name}</b><small>{venueFor(r.game.id,r.game.venue)}</small></p></div>)}</div></div></section>}
-      {detailTeam!==null&&<TeamDrawer team={detailTeam} rank={leaderboard.findIndex(row=>row.team===detailTeam)+1} ranking={leaderboard.find(row=>row.team===detailTeam)!} scores={gradedScores.filter(score=>score.team===detailTeam)} onClose={()=>setDetailTeam(null)}/>}
-      {confirmReplacement&&existingScore&&<div className="confirm-backdrop" onClick={()=>setConfirmReplacement(false)}><section className="confirm-card" role="alertdialog" aria-modal="true" aria-label="Confirm score replacement" onClick={event=>event.stopPropagation()}><span>↻</span><h3>Replace saved score?</h3><p>Team {String(team).padStart(2,"0")} · {selectedGame.name}</p>{timingSummary&&<p className="confirm-time">⏱ {timingSummary}</p>}<div><article><small>Current</small><strong>{existingScore.total}<i> pts</i></strong></article><b>→</b><article><small>New</small><strong>{draftTotal}<i> pts</i></strong></article></div><p className="confirm-warning">The existing result will be replaced. This does not create a duplicate.</p><footer><button onClick={()=>setConfirmReplacement(false)}>Cancel</button><button className="confirm-action" onClick={()=>saveScore(true)}>Replace score</button></footer></section></div>}
-    </main>
-  </div>;
-}
-
-function StationDashboard({game,scores,selectedTeam,onSelect}:{game:typeof games[number];scores:ScoreRow[];selectedTeam:number;onSelect:(team:number)=>void}){const completed=new Set(scores.filter(score=>score.game===game.id).map(score=>score.team));return <section className="station-dashboard"><div className="station-dashboard-head"><div><span className="station-dashboard-icon">{game.icon}</span><div><small>{game.country} STATION</small><b>{game.name}</b></div></div><strong>{completed.size}<i>/16 scored</i></strong></div><div className="station-progress"><span style={{width:`${completed.size/16*100}%`}}/></div><div className="team-chip-list">{teams.map(number=><button key={number} className={`${completed.has(number)?"scored":"waiting"} ${selectedTeam===number?"selected":""}`} onClick={()=>onSelect(number)}><span>{completed.has(number)?"✓":String(number).padStart(2,"0")}</span><small>Team {String(number).padStart(2,"0")}</small></button>)}</div><p><span>● Scored</span><span>○ Waiting</span><b>Tap a team to score or review it</b></p></section>}
-
-function TeamDrawer({team,rank,ranking,scores,onClose}:{team:number;rank:number;ranking:{team:number;total:number;played:number};scores:ScoreRow[];onClose:()=>void}){return <div className="drawer-backdrop" onClick={onClose}><aside className="team-drawer" role="dialog" aria-modal="true" aria-label={`Team ${team} score details`} onClick={event=>event.stopPropagation()}><div className="drawer-handle"/><header><div><span className="eyebrow">LIVE TEAM PROFILE</span><h2>Team {String(team).padStart(2,"0")}</h2></div><button aria-label="Close team details" onClick={onClose}>×</button></header><div className="team-summary"><article><small>Rank</small><strong>#{rank}</strong></article><article><small>Total</small><strong>{ranking.total}<i> pts</i></strong></article><article><small>Completed</small><strong>{ranking.played}<i>/11</i></strong></article></div><div className="team-progress"><span style={{width:`${ranking.played/11*100}%`}}/></div><div className="team-games">{games.map(game=>{const row=scores.find(score=>score.game===game.id);if(!row)return <article className="team-game pending" key={game.id}><span>{game.icon}</span><div><small>{game.country}</small><b>{game.name}</b></div><em>Not played</em></article>;const parts=(row.notes||"").split(" · ").filter(Boolean),timeParts=parts.filter(part=>/time:/i.test(part)),otherNotes=parts.filter(part=>!/time:/i.test(part));return <article className="team-game completed" key={game.id}><div className="team-game-head"><span>{game.icon}</span><div><small>{game.country}</small><b>{game.name}</b></div><strong>{row.total}<i>/40</i></strong></div>{timeParts.length>0&&<div className="time-pills">{timeParts.map(part=><span key={part}>⏱ {part}</span>)}</div>}{row.breakdown&&Object.keys(row.breakdown).length>0&&<details><summary>Score breakdown</summary><div className="breakdown-grid">{Object.entries(row.breakdown).map(([label,value])=><span className={label==="Penalties"?"deduction":""} key={label}><small>{label}</small><b>{label==="Penalties"?"−":""}{value}</b></span>)}</div></details>}{otherNotes.length>0&&<p>“{otherNotes.join(" · ")}”</p>}</article>})}</div></aside></div>}
-
-function GameGuide({game}:{game:typeof games[number]}){return <aside className="guide-card" style={{"--accent":game.color} as React.CSSProperties}><div className="guide-hero"><span>{game.icon}</span><small>{game.country}</small><h3>{game.name}</h3><p>{venueFor(game.id,game.venue)}</p></div><div className="guide-content"><section className="guide-score"><div><span className="eyebrow">SCORE BREAKDOWN</span><strong>{game.max}<i> PTS</i></strong></div><div className="guide-score-grid">{game.criteria.map(([label,max])=><span key={label}><b>{label}</b><em>{max} pts</em></span>)}</div></section><section className="rules"><span className="eyebrow">QUICK GAME GUIDE</span><div className="rule-list">{game.rules.map((rule,index)=>{const split=rule.indexOf(":");const hasLabel=split>0&&split<42;const lower=rule.toLowerCase();const tone=lower.includes("penalt")||lower.includes("deduct")?"penalty":lower.includes("warning")?"warning":"";const label=hasLabel?rule.slice(0,split):index===0?"How to play":`Rule ${index+1}`;const detail=hasLabel?rule.slice(split+1).trim():rule;return <article className={tone} key={rule}><span>{tone==="penalty"?"−":tone==="warning"?"!":index+1}</span><div><b>{label}</b><p>{detail}</p></div></article>})}</div></section></div></aside>}
-
-function ScoreRecords({scores,selectedGameId}:{scores:ScoreRow[];selectedGameId:string}){
-  const [filter,setFilter]=useState(selectedGameId);
-  useEffect(()=>setFilter(selectedGameId),[selectedGameId]);
-  const ordered=[...scores].sort((a,b)=>(b.updated_at||"").localeCompare(a.updated_at||"")||a.team-b.team);
-  const visible=filter==="all"?ordered:ordered.filter(row=>row.game===filter);
-  const tied=(row:ScoreRow)=>scores.some(other=>other!==row&&other.game===row.game&&other.total===row.total);
-  function exportScores(){const esc=(v:unknown)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]!));const rows=ordered.map(row=>{const game=games.find(g=>g.id===row.game);return [row.team,game?.name||row.game,game?.country||"",row.total,game?.max||"",row.notes||"",row.updated_at||""]});const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Scores"><Table>${[["Team","Game","Country","Score","Maximum","Notes","Updated At"],...rows].map(r=>`<Row>${r.map(v=>`<Cell><Data ss:Type="${typeof v==='number'?'Number':'String'}">${esc(v)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet></Workbook>`;const url=URL.createObjectURL(new Blob([xml],{type:"application/vnd.ms-excel"}));const a=document.createElement("a");a.href=url;a.download=`IGN-score-backup-${new Date().toISOString().slice(0,10)}.xls`;a.click();URL.revokeObjectURL(url)}
-  return <section className="panel records"><div className="panel-title records-head"><div><span className="eyebrow">GAME MASTER VIEW</span><h3>Saved score records</h3></div><div className="record-tools"><select aria-label="Filter saved scores" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All games</option>{games.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select><button onClick={exportScores}>↓ Excel backup</button><a href={SCORE_SHEET_URL} target="_blank" rel="noreferrer">Open Google Sheet ↗</a></div></div><div className="record-summary"><b>{visible.length}</b> shown · {scores.length} total saved</div>{!visible.length?<p className="records-empty">No saved scores for this view yet.</p>:<div className="record-list">{visible.map(row=>{const game=games.find(g=>g.id===row.game);return <article key={`${row.team}-${row.game}`} className={tied(row)?"tie-record":""}><span className="record-icon">{game?.icon||"🎮"}</span><div><small>TEAM {String(row.team).padStart(2,"0")} · {game?.country}</small><b>{game?.name||row.game}</b>{row.notes&&<p>“{row.notes}”</p>}</div><strong>{row.total}<small>PTS</small></strong>{tied(row)&&<em>⚖ TIE</em>}</article>})}</div>}</section>
+      {!visibleBooths.length && <div className="empty-state"><span>⌛</span><h3>No booths in this view</h3><p>Try another filter to see the full case board.</p></div>}
+      <footer><span>✦</span><p>Keep your identity concealed. Keep your evidence close.</p><span>✦</span></footer>
+    </section>
+  </main>;
 }
