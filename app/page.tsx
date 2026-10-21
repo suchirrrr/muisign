@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import "./ign.css";
 
-type Mode = "guest" | "master";
+type Mode = "guest" | "master" | "map";
 type Filter = "all" | "open" | "occupied";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://bltyvdocczegpbkglnof.supabase.co";
@@ -97,14 +97,14 @@ export default function Home() {
   const quickBooths = booths.filter(booth => filter === "open" ? availability[booth.id] : filter === "occupied" ? !availability[booth.id] : true).sort((a,b) => filter === "all" ? Number(availability[b.id]) - Number(availability[a.id]) : a.number - b.number);
   const detailBooth = booths.find(booth => booth.id === detailBoothId);
 
-  return <main className={`crime-shell ${mode === "master" ? "control-mode" : "guest-mode"}`}>
+  return <main className={`crime-shell ${mode === "master" ? "control-mode" : mode === "map" ? "map-mode" : "guest-mode"}`}>
     <header className="crime-header">
       <div className="crime-brand"><span className="brand-signal">M</span><div><b>MURDER MASQUERADE</b><small>OCTOBER IGN · LIVE SYSTEM</small></div></div>
-      <nav className="view-tabs" aria-label="Choose view"><button className={mode === "guest" ? "active" : ""} onClick={() => setMode("guest")}>Live board</button><button className={mode === "master" ? "active" : ""} onClick={() => setMode("master")}>My booth</button></nav>
+      <nav className="view-tabs" aria-label="Choose view"><button className={mode === "guest" ? "active" : ""} onClick={() => setMode("guest")}>Live board</button><button className={mode === "master" ? "active" : ""} onClick={() => setMode("master")}>My booth</button><button className={mode === "map" ? "active" : ""} onClick={() => setMode("map")}>Map</button></nav>
       <button className="header-sync" onClick={() => loadAvailability()}><i className={sync === "Live now" || sync === "Board updated" ? "live" : ""}/><span>{sync}</span><b>↻</b></button>
     </header>
 
-    {mode === "guest" ? <>
+    {mode !== "map" && <>{mode === "guest" ? <>
       <section className="crime-hero">
         <div className="hero-code">INCIDENT / 10.2026 / ACTIVE</div>
         <div className="hero-message"><span>NOT EVERY CLUE WANTS TO BE FOUND</span><h1>ENTER THE<br/><em>CRIME SCENE</em></h1><p>Eight investigations. Sixteen live booths. Choose an available lead before someone else gets there first.</p></div>
@@ -130,6 +130,32 @@ export default function Home() {
       {(mode === "guest" ? !quickBooths.length : !visibleCases.length) && <div className="no-cases"><b>NO MATCHING CASES</b><p>Change the status filter to continue.</p></div>}
     </section>
     {detailBooth && <div className="detail-backdrop" onClick={() => setDetailBoothId(null)}><section className={`booth-detail ${availability[detailBooth.id] ? "open" : "busy"}`} onClick={event => event.stopPropagation()}><button className="detail-close" onClick={() => setDetailBoothId(null)} aria-label="Close">×</button><span className="detail-code">CASE STATION {String(detailBooth.number).padStart(2,"0")}</span><i className="detail-icon">{detailBooth.icon}</i><h2>{detailBooth.name}</h2><p>BOOTH {detailBooth.wing}</p><div><span/><strong>{availability[detailBooth.id] ? "AVAILABLE NOW" : "CURRENTLY OCCUPIED"}</strong></div><small>{availability[detailBooth.id] ? "This booth is ready for your team." : "Choose another green booth and return later."}</small></section></div>}
+    </>}
+    {mode === "map" && <VenueMap/>}
     <footer className="crime-footer"><span>SYSTEM ONLINE</span><p>Trust the evidence. Question everyone.</p><b>MM / 2026</b></footer>
   </main>;
+}
+
+function VenueMap(){
+  const Booth=({name,wing}:{name:string,wing:"A"|"B"})=><div className={`map-booth wing-${wing.toLowerCase()}`}><small>{wing} BOOTH</small><b>{name}</b></div>;
+  return <section className="map-page">
+    <header className="map-intro"><span>VENUE INTELLIGENCE</span><h1>Find the crime scene.</h1><p>A booths are marked in green. B booths are marked in amber. Swipe sideways on a phone to inspect the full floor plan.</p></header>
+    <div className="map-legend"><span><i className="legend-a"/> A booths · top half</span><span><i className="legend-b"/> B booths · bottom half</span><span><i className="legend-service"/> Event services</span></div>
+    <div className="venue-scroll"><div className="venue-plan">
+      <article className="floor badminton-floor"><h2>BADMINTON COURT</h2><div className="court-map">
+        <div className="service supervisors">SUPERVISORS</div><div className="service stage">STAGE</div>
+        <div className="left-a"><Booth name="Evidence Relay" wing="A"/><Booth name="Blind Vault Heist" wing="A"/><Booth name="Secret Sketch" wing="A"/><Booth name="Crime Scene" wing="A"/></div>
+        <div className="right-a"><Booth name="Casino" wing="A"/><Booth name="Forensics Lab" wing="A"/></div>
+        <div className="left-b"><Booth name="Evidence Relay" wing="B"/><Booth name="Blind Vault Heist" wing="B"/><Booth name="Secret Sketch" wing="B"/></div>
+        <div className="right-b"><Booth name="Crime Scene" wing="B"/><Booth name="Casino" wing="B"/><Booth name="Forensics Lab" wing="B"/></div>
+        <div className="service fnb">F&amp;B</div>
+      </div></article>
+      <article className="floor lounge-floor"><h2>STUDENT LOUNGE · SC103</h2><div className="lounge-map">
+        <div className="lounge-a"><Booth name="Telephone Witness" wing="A"/><Booth name="Locked Study" wing="A"/></div>
+        <div className="service registration">REGISTRATION</div>
+        <div className="lounge-b"><Booth name="Telephone Witness" wing="B"/><Booth name="Locked Study" wing="B"/></div>
+        <div className="service bag">BAG LOCKER</div>
+      </div></article>
+    </div></div>
+  </section>;
 }
